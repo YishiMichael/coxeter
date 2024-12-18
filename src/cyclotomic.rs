@@ -1,3 +1,99 @@
+use std::collections::HashMap;
+
+use abstalg as alg;
+use itertools::Itertools;
+
+lazy_static::lazy_static! {
+    static ref POLYNOMIAL_ALGEBRA: alg::PolynomialAlgebra<alg::ReducedFractions<alg::CheckedInts<i32>>>
+        = alg::PolynomialAlgebra::new(alg::ReducedFractions::new(alg::I32));
+
+    static ref CYCLOTOMIC_FIELDS_CACHE: HashMap<usize, alg::QuotientField<alg::PolynomialAlgebra<alg::ReducedFractions<alg::CheckedInts<i32>>>>>
+        = HashMap::new();
+}
+
+fn cyclotomic_field(
+    order: usize,
+) -> &'static alg::QuotientField<alg::PolynomialAlgebra<alg::ReducedFractions<alg::CheckedInts<i32>>>>
+{
+    CYCLOTOMIC_FIELDS_CACHE.entry(order).or_insert_with(|| {
+        // Construct the cyclotomic polynomial with Möbius inversion formula.
+        // See https://en.wikipedia.org/wiki/Cyclotomic_polynomial
+        let modulo = cyclotomic_polynomial(POLYNOMIAL_ALGEBRA, order);
+        alg::QuotientField::new(POLYNOMIAL_ALGEBRA.clone(), modulo)
+    })
+}
+
+fn cyclotomic_polynomial(
+    polynomial_algebra: &alg::PolynomialAlgebra<alg::ReducedFractions<alg::CheckedInts<i32>>>,
+    order: usize,
+) -> <alg::PolynomialAlgebra<alg::ReducedFractions<alg::CheckedInts<i32>>> as alg::Domain>::Elem {
+    let (numerator, denominator) = prime_factors(order).dedup().powerset().fold(
+        (
+            alg::Monoid::one(polynomial_algebra),
+            alg::Monoid::one(polynomial_algebra),
+        ),
+        |(numerator, denominator), factors| {
+            let is_denominator = factors.len() % 2 == 1;
+            let degree = order / factors.into_iter().product::<usize>();
+            // x^d - 1
+            let polynomial_factor = alg::AbelianGroup::sub(
+                polynomial_algebra,
+                &alg::CommuntativeMonoid::times(
+                    polynomial_algebra,
+                    degree,
+                    &vec![
+                        alg::CommuntativeMonoid::zero(polynomial_algebra.base()),
+                        alg::Monoid::one(polynomial_algebra.base()),
+                    ],
+                ),
+                &alg::Monoid::one(polynomial_algebra),
+            );
+            if is_denominator {
+                (
+                    numerator,
+                    alg::Semigroup::mul(polynomial_algebra, &polynomial_factor, &denominator),
+                )
+            } else {
+                (
+                    alg::Semigroup::mul(polynomial_algebra, &polynomial_factor, &numerator),
+                    denominator,
+                )
+            }
+        },
+    );
+    alg::EuclideanDomain::quo(polynomial_algebra, &numerator, &denominator)
+}
+
+fn prime_factors(n: usize) -> impl Iterator<Item = usize> {
+    std::iter::repeat(()).scan((n, 2usize), |(n, p), _| {
+        if *n == 1 {
+            None
+        } else {
+            *p = (*p..).find(|p| *n % p == 0).unwrap();
+            *n /= *p;
+            Some(*p)
+        }
+    })
+}
+
+// #[derive(Clone, Debug)]
+// pub struct CyclotomicFactory<A>
+// where
+//     A: AbelianGroup,
+// {
+//     base: A,
+//     len: usize,
+// }
+
+// impl<A> Cyclotomic<A>
+// where
+//     A: AbelianGroup,
+// {
+//     pub fn new(base: A, len: usize) -> Self {
+//         Self { base, len }
+//     }
+// }
+
 pub trait GroupElement:
     Clone
     + std::ops::Add<Output = Self>
