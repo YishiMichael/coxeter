@@ -1,4 +1,5 @@
 use alga::general as alg;
+use cached::proc_macro::cached;
 
 // use std::collections::HashMap;
 
@@ -93,40 +94,125 @@ use alga::general as alg;
 //     }
 // }
 
-// pub trait GroupElement:
-//     Clone
-//     + std::ops::Add<Output = Self>
-//     + std::ops::AddAssign
-//     + std::ops::Sub<Output = Self>
-//     + std::ops::SubAssign
-//     + std::ops::Neg<Output = Self>
-//     + num::Zero
-// {
-// }
+type NN = u32;
 
-// pub trait RingElement:
-//     GroupElement + std::ops::Mul<Output = Self> + std::ops::MulAssign + num::One
-// {
-// }
+#[derive(Clone)]
+struct PrimeFactorTerm {
+    prime: NN,
+    degree: NN,
+}
 
-// impl GroupElement for i32 {}
-// impl RingElement for i32 {}
+#[cached]
+fn factor_impl(prime: NN, degree: NN) -> NN {
+    prime.pow(degree as u32)
+}
+
+#[cached]
+fn factor_phi_impl(prime: NN, degree: NN) -> NN {
+    factor_impl(prime, degree) / prime * (prime - 1)
+}
+
+impl PrimeFactorTerm {
+    fn factor(&self) -> NN {
+        factor_impl(self.prime, self.degree)
+    }
+
+    fn factor_phi(&self) -> NN {
+        factor_phi_impl(self.prime, self.degree)
+    }
+}
+
+#[cached]
+fn factorize(num: NN) -> Vec<PrimeFactorTerm> {
+    (2..=num)
+        .filter(|&n| (2..n).all(|p| n % p != 0))
+        .scan(num, |num, prime| {
+            (*num != 1).then(|| PrimeFactorTerm {
+                prime,
+                degree: std::iter::repeat(prime)
+                    .take_while(|prime| (*num % prime == 0).then(|| *num /= prime).is_some())
+                    .count() as NN,
+            })
+        })
+        .collect()
+    // let mut factorization = Vec::<(usize, usize)>::new();
+    // let mut prime = 2usize;
+    // while num > 1 {
+    //     prime = (prime..)
+    //         .find(|&n| factorization.iter().all(|&(p, _)| n % p != 0))
+    //         .unwrap();
+    //     let mut degree = 0usize;
+    //     while num % prime == 0 {
+    //         degree += 1;
+    //         num /= prime;
+    //     }
+    //     factorization.push((prime, degree));
+    // }
+    // factorization
+}
+
+#[cached]
+fn field_inv(element: NN, order: NN) -> NN {
+    // Calculates $denominator^(-1)$ over the finite field of order $order$.
+    if element == 1 {
+        1
+    } else {
+        (1 + element * order - field_inv(order % element, element) * order) / element
+    }
+}
+
+fn field_div(numerator: NN, denominator: NN, order: NN) -> NN {
+    // Calculates $numerator * denominator^(-1) % order$ over the finite field of order $order$.
+    numerator * field_inv(denominator % order, order) % order
+}
 
 // A ring adjoint with roots of unity.
-// The length of vector represents the order.
-// Basis of coefficients: see Thomas, Integral Bases for Subfields of Cyclotomic Fields
+// Basis of coefficients: see Thomas, "Integral Bases for Subfields of Cyclotomic Fields".
+// Slightly changed the definition of $J_(k, p)$ to: 1..p if k = 0, 0..p otherwise.
+// In the ndarray, each axis represents a factor $p^v$ in $n = prod_i p_i^(v_i)$.
+// Elements along an axis represent $zeta_(p^v)^i$ with exponents $i$ running through $p^(v-1)$..$p^v$.
+// The size of this axis is thus $p^v - p^(v-1) = phi(p^v)$, and the whole size of ndarray is $phi(n)$.
 #[derive(Clone, Debug)]
-pub struct Cyclotomic<C>(Vec<C>);
+pub struct Cyclotomic<C> {
+    order: NN,
+    coeffs: Vec<C>,
+}
 
 impl<C> Cyclotomic<C> {
     // pub fn order(&self) -> usize {
     //     self.0.len()
     // }
 
-    pub fn root_of_unity(order: usize, exponent: usize) -> Self
+    pub fn root_of_unity(order: NN, exponent: NN) -> Self
     where
-        C: alg::Identity<alg::Additive> + alg::Identity<alg::Multiplicative>,
+        C: alg::RingCommutative,
     {
+        let order_factorization = factorize(order);
+        let mut strides = order_factorization
+            .iter()
+            .rev()
+            .scan(1, |stride, &prime_factor_term| {
+                *stride *= prime_factor_term.factor_phi();
+                Some(*stride)
+            })
+            .collect::<Vec<_>>();
+        strides.rotate_right(1);
+        let size = strides
+            .get_mut(0)
+            .map(|size_ref| std::mem::replace(size_ref, 1))
+            .unwrap_or(1);
+        strides.reverse();
+        let coords = order_factorization
+            .iter()
+            .map(|&prime_factor_term| {
+                let factor = prime_factor_term.factor();
+                field_div(exponent, order / factor, factor)
+            })
+            .collect::<Vec<_>>();
+        Self {
+            order,
+            poly: Polynomial::monomial(exponent),
+        }
         // let mut number = std::iter::repeat_with(|| <C as alg::Identity<alg::Additive>>::identity()).take(order);
         // number.0[exponent] = <C as alg::Identity<alg::Multiplicative>>::identity();
         // number
