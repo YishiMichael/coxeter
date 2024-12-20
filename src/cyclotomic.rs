@@ -1,5 +1,8 @@
+use std::ops::{Range, RangeBounds};
+
 use alga::general as alg;
 use cached::proc_macro::cached;
+use itertools::Itertools;
 
 // use std::collections::HashMap;
 
@@ -97,74 +100,242 @@ use cached::proc_macro::cached;
 type NN = u32;
 
 #[derive(Clone)]
-struct PrimeFactorTerm {
+struct FiniteField {
     prime: NN,
     degree: NN,
+    prime_minus_one: NN,
+    order_div_prime: NN,
+    order: NN,
+    order_phi: NN,
 }
 
-#[cached]
-fn factor_impl(prime: NN, degree: NN) -> NN {
-    prime.pow(degree as u32)
-}
-
-#[cached]
-fn factor_phi_impl(prime: NN, degree: NN) -> NN {
-    factor_impl(prime, degree) / prime * (prime - 1)
-}
-
-impl PrimeFactorTerm {
-    fn factor(&self) -> NN {
-        factor_impl(self.prime, self.degree)
+impl FiniteField {
+    fn new(prime: NN, degree: NN) -> Self {
+        let prime_minus_one = prime - 1;
+        let order_div_prime = prime.pow(degree - 1);
+        Self {
+            prime,
+            degree,
+            prime_minus_one,
+            order_div_prime,
+            order: prime * order_div_prime,
+            order_phi: prime_minus_one * order_div_prime,
+        }
     }
 
-    fn factor_phi(&self) -> NN {
-        factor_phi_impl(self.prime, self.degree)
+    fn inv(&self, element: NN) -> NN {
+        fn mod_inv(n: NN, m: NN) -> NN {
+            if n == 1 {
+                1
+            } else {
+                (1 + n * m - mod_inv(m % n, n) * m) / n
+            }
+        }
+        mod_inv(element, self.order)
     }
-}
 
-#[cached]
-fn factorize(num: NN) -> Vec<PrimeFactorTerm> {
-    (2..=num)
-        .filter(|&n| (2..n).all(|p| n % p != 0))
-        .scan(num, |num, prime| {
-            (*num != 1).then(|| PrimeFactorTerm {
-                prime,
-                degree: std::iter::repeat(prime)
-                    .take_while(|prime| (*num % prime == 0).then(|| *num /= prime).is_some())
-                    .count() as NN,
-            })
-        })
-        .collect()
-    // let mut factorization = Vec::<(usize, usize)>::new();
-    // let mut prime = 2usize;
-    // while num > 1 {
-    //     prime = (prime..)
-    //         .find(|&n| factorization.iter().all(|&(p, _)| n % p != 0))
-    //         .unwrap();
-    //     let mut degree = 0usize;
-    //     while num % prime == 0 {
-    //         degree += 1;
-    //         num /= prime;
-    //     }
-    //     factorization.push((prime, degree));
+    // fn iter_index(&self) -> Range<NN> {
+    //     0..self.order_phi
     // }
-    // factorization
+
+    // fn index_to_exponent(&self, index: NN) -> NN {
+    //     index + self.order_div_prime
+    //     //index / self.prime_minus_one * self.prime + index % self.prime_minus_one + 1
+    // }
+
+    // fn exponent_to_index_set(&self, exponent: NN) -> (bool, impl Iterator<Item = NN> + '_) {
+    //     let flip_sign = exponent < self.order_div_prime;
+    //     (
+    //         flip_sign,
+    //         if flip_sign {
+    //             1..=self.prime_minus_one
+    //         } else {
+    //             0..=0
+    //         }
+    //         .map(move |k| exponent + k * self.order_div_prime)
+    //         .map(|exponent| {
+    //             exponent - self.order_div_prime
+    //             //exponent / self.prime * self.prime_minus_one + exponent % self.prime - 1
+    //         }),
+    //     )
+    // }
 }
 
-#[cached]
-fn field_inv(element: NN, order: NN) -> NN {
-    // Calculates $denominator^(-1)$ over the finite field of order $order$.
-    if element == 1 {
-        1
-    } else {
-        (1 + element * order - field_inv(order % element, element) * order) / element
+#[derive(Clone)]
+struct CyclotomicField {
+    order: NN,
+    finite_fields: Vec<FiniteField>,
+    strides: Vec<NN>,
+    size: NN,
+}
+
+impl CyclotomicField {
+    fn new(order: NN) -> Self {
+        let finite_fields = (2..=order)
+            .filter(|&n| (2..n).all(|p| n % p != 0))
+            .scan(order, |num, prime| {
+                (*num != 1).then(|| {
+                    FiniteField::new(
+                        prime,
+                        std::iter::repeat(prime)
+                            .take_while(|prime| {
+                                (*num % prime == 0).then(|| *num /= prime).is_some()
+                            })
+                            .count() as NN,
+                    )
+                })
+            })
+            .collect::<Vec<_>>();
+        let mut strides = finite_fields
+            .iter()
+            .rev()
+            .scan(1, |stride, finite_field| {
+                *stride *= finite_field.order_phi;
+                Some(*stride)
+            })
+            .collect::<Vec<_>>();
+        strides.rotate_right(1);
+        let size = strides
+            .get_mut(0)
+            .map(|size_ref| std::mem::replace(size_ref, 1))
+            .unwrap_or(1);
+        strides.reverse();
+        Self {
+            order,
+            finite_fields,
+            strides,
+            size,
+        }
+    }
+
+    fn decompose_exponent(&self, exponent: NN) -> Vec<NN> {
+        self.finite_fields
+            .iter()
+            .map(|finite_field| {
+                exponent * finite_field.inv(self.order / finite_field.order % finite_field.order)
+                    % finite_field.order
+            })
+            .collect::<Vec<_>>()
+    }
+
+    // fn index_to_subindices(&self, index: NN) -> impl Iterator<Item = NN> + '_ {
+    //     self.strides.iter().scan(index, |state, &stride| {
+    //         Some(*state / stride).inspect(|_| *state &= stride)
+    //     })
+    // }
+
+    fn read_terms<'a, C: alg::RingCommutative + 'a>(
+        &'a self,
+        coeffs: Vec<C>,
+    ) -> impl Iterator<Item = (Vec<NN>, C)> + 'a {
+        self.finite_fields
+            .iter()
+            .map(|finite_field| 0..finite_field.order_phi)
+            .multi_cartesian_product()
+            .zip(coeffs)
+            .filter(|(_, coeff)| !coeff.is_zero())
+            .map(move |(indices, coeff)| {
+                (
+                    self.finite_fields
+                        .iter()
+                        .zip(indices.into_iter())
+                        .map(|(finite_field, index)| index + finite_field.order_div_prime)
+                        .collect(),
+                    coeff,
+                )
+            })
+    }
+
+    fn write_terms<C: alg::RingCommutative>(
+        &self,
+        terms: impl Iterator<Item = (Vec<NN>, C)>,
+    ) -> Vec<C> {
+        let mut coeffs = vec![C::zero(); self.size as usize];
+        terms.for_each(|(exponents, coeff)| {
+            let mut neg_sign = false;
+            let index_sets = self
+                .finite_fields
+                .iter()
+                .zip(exponents.into_iter())
+                .map(|(finite_field, exponent)| {
+                    let flip_sign = exponent < finite_field.order_div_prime;
+                    neg_sign ^= flip_sign;
+                    if flip_sign {
+                        1..=finite_field.prime_minus_one
+                    } else {
+                        0..=0
+                    }
+                    .map(move |k| exponent + k * finite_field.order_div_prime)
+                    .map(|exponent| exponent - finite_field.order_div_prime)
+                })
+                .multi_cartesian_product()
+                .collect::<Vec<_>>();
+            let signed_coeff = if neg_sign { -coeff } else { coeff };
+            index_sets.into_iter().for_each(|indices| {
+                let flattened_index = self
+                    .strides
+                    .iter()
+                    .zip(indices.into_iter())
+                    .map(|(&stride, index)| index * stride)
+                    .sum::<NN>();
+                coeffs[flattened_index as usize] = signed_coeff.clone();
+            });
+        });
+        coeffs
+    }
+
+    fn embed_coeffs<C: alg::RingCommutative>(
+        &self,
+        subfield: &'static CyclotomicField,
+        coeffs: Vec<C>,
+    ) -> Vec<C> {
+        self.write_terms(subfield.read_terms(coeffs).map(|(exponents, coeff)| {
+            (
+                self.finite_fields
+                    .iter()
+                    .zip_longest(subfield.finite_fields.iter().zip(exponents))
+                    .map(|item| match item {
+                        itertools::EitherOrBoth::Both(
+                            embedded_finite_field,
+                            (finite_field, exponent),
+                        ) => exponent * (embedded_finite_field.order / finite_field.order),
+                        itertools::EitherOrBoth::Left(embedded_finite_field) => {
+                            embedded_finite_field.order
+                        }
+                        _ => unreachable!(),
+                    })
+                    .collect(),
+                coeff,
+            )
+        }))
+        // let mut embedded_coeffs = vec![C::zero(); self.size as usize];
+        // cyclotomic_field
+        //     .iter_indices()
+        //     .zip(coeffs.iter())
+        //     .map(|(indices, coeff)| {
+        //         self.finite_fields
+        //             .iter()
+        //             .zip(
+        //                 cyclotomic_field
+        //                     .finite_fields
+        //                     .iter()
+        //                     .zip(indices.iter())
+        //                     .map(|(field, index)| index + field.order_div_prime),
+        //             )
+        //             .map(|(embedded_field, exponent)| finite_field.index_to_exponent(index))
+        //     })
     }
 }
 
-fn field_div(numerator: NN, denominator: NN, order: NN) -> NN {
-    // Calculates $numerator * denominator^(-1) % order$ over the finite field of order $order$.
-    numerator * field_inv(denominator % order, order) % order
+#[cached]
+fn cyclotomic_field(order: NN) -> CyclotomicField {
+    CyclotomicField::new(order)
 }
+
+// fn field_div(numerator: NN, denominator: NN, order: NN) -> NN {
+//     // Calculates $numerator * denominator^(-1) % order$ over the finite field of order $order$.
+//     numerator * field_inv(denominator % order, order) % order
+// }
 
 // A ring adjoint with roots of unity.
 // Basis of coefficients: see Thomas, "Integral Bases for Subfields of Cyclotomic Fields".
@@ -188,27 +359,7 @@ impl<C> Cyclotomic<C> {
         C: alg::RingCommutative,
     {
         let order_factorization = factorize(order);
-        let mut strides = order_factorization
-            .iter()
-            .rev()
-            .scan(1, |stride, &prime_factor_term| {
-                *stride *= prime_factor_term.factor_phi();
-                Some(*stride)
-            })
-            .collect::<Vec<_>>();
-        strides.rotate_right(1);
-        let size = strides
-            .get_mut(0)
-            .map(|size_ref| std::mem::replace(size_ref, 1))
-            .unwrap_or(1);
-        strides.reverse();
-        let coords = order_factorization
-            .iter()
-            .map(|&prime_factor_term| {
-                let factor = prime_factor_term.factor();
-                field_div(exponent, order / factor, factor)
-            })
-            .collect::<Vec<_>>();
+
         Self {
             order,
             poly: Polynomial::monomial(exponent),
