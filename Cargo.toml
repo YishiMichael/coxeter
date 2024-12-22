@@ -5,6 +5,5 @@ edition = "2021"
 
 [dependencies]
 alga = "0.9.3"
-cached = "0.54.0"
 itertools = "0.13.0"
 num = "0.4.3"
