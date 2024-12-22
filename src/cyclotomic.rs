@@ -339,7 +339,6 @@ fn cyclotomic_field(order: NN) -> CyclotomicField {
 // In the representation space, each axis represents a factor $p^v$ in $n = prod_i p_i^(v_i)$.
 // Elements along an axis represent $zeta_(p^v)^i$ with exponents $i$ running through $p^(v-1)$..$p^v$.
 // The size of this axis is thus $p^v - p^(v-1) = phi(p^v)$, and the whole size of representation space is $phi(n)$.
-// Invariants: `terms` are arranged in lexigraphical order of exponents; all coefficients are nonzero.
 #[derive(Clone, PartialEq)]
 pub struct Cyclotomic<C> {
     //order: NN,

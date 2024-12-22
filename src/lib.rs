@@ -1,6 +1,7 @@
 pub mod cyclotomic;
-pub mod graded_ring;
+pub mod graded_algebra;
 pub mod polynomial;
+pub mod prufer_group;
 
 pub fn add(left: u64, right: u64) -> u64 {
     left + right
