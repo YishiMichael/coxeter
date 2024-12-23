@@ -1,7 +1,7 @@
 pub mod cyclotomic;
 pub mod graded_algebra;
 pub mod polynomial;
-pub mod prufer_group;
+pub mod prufer_monoid;
 
 #[cfg(test)]
 mod tests {

@@ -1,10 +1,9 @@
 use alga::general as alg;
 use itertools::Itertools;
-use num::One;
 
 use super::graded_algebra::GradedAlgebra;
 use super::graded_algebra::GradedAlgebraMeta;
-use super::prufer_group::PruferGroup;
+use super::prufer_monoid::PruferMonoid;
 
 #[derive(Clone, Debug)]
 pub struct CyclotomicMeta<R> {
@@ -16,7 +15,7 @@ where
     R: alg::RingCommutative,
 {
     type Ring = R;
-    type Grade = PruferGroup<u32>;
+    type Grade = PruferMonoid<u32>;
 
     fn annihilate(element: GradedAlgebra<Self>) -> GradedAlgebra<Self> {
         fn prime_factors(n: u32) -> impl Iterator<Item = u32> {
@@ -35,7 +34,7 @@ where
             element
                 .clone()
                 .into_terms()
-                .map(|(_, grade)| grade.denominator)
+                .map(|(_, grade)| grade.denom().clone())
                 .fold(1, |common_multiple, denominator| {
                     num::Integer::lcm(&common_multiple, &denominator)
                 }),
@@ -43,7 +42,7 @@ where
         .dedup()
         .map(|factor| {
             (1..factor)
-                .map(|i| Cyclotomic::one() - Cyclotomic::root_of_unity(factor, i))
+                .map(|i| <Cyclotomic<R> as num::One>::one() - Cyclotomic::root_of_unity(factor, i))
                 .fold(
                     <Cyclotomic<R> as num::Zero>::zero(),
                     <Cyclotomic<R> as std::ops::Add>::add,
@@ -57,6 +56,9 @@ pub type Cyclotomic<R> = GradedAlgebra<CyclotomicMeta<R>>;
 
 impl<R: alg::RingCommutative> Cyclotomic<R> {
     pub fn root_of_unity(order: u32, exponent: u32) -> Self {
-        Self::embed(R::one(), PruferGroup::new(order, exponent))
+        Self::embed(
+            R::one(),
+            PruferMonoid::new(num_rational::Ratio::new(exponent, order)),
+        )
     }
 }
