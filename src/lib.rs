@@ -1,7 +1,9 @@
+pub mod coxeter_graph;
 pub mod cyclotomic;
 pub mod graded_algebra;
 pub mod polynomial;
 pub mod prufer_monoid;
+pub mod square_matrix;
 
 #[cfg(test)]
 mod tests {

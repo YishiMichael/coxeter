@@ -42,13 +42,12 @@ where
         .dedup()
         .map(|factor| {
             (1..factor)
-                .map(|i| <Cyclotomic<R> as num::One>::one() - Cyclotomic::root_of_unity(factor, i))
-                .fold(
-                    <Cyclotomic<R> as num::Zero>::zero(),
-                    <Cyclotomic<R> as std::ops::Add>::add,
-                )
+                .map(|i| {
+                    Cyclotomic::root_of_unity(factor, 0) - Cyclotomic::root_of_unity(factor, i)
+                })
+                .fold(num::Zero::zero(), std::ops::Add::add)
         })
-        .fold(element, <Cyclotomic<R> as std::ops::Mul>::mul)
+        .fold(element, std::ops::Mul::mul)
     }
 }
 

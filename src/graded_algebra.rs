@@ -11,29 +11,33 @@ pub trait GradedAlgebraMeta: Clone {
 }
 
 #[derive(Clone, Debug)]
-pub struct GradedAlgebra<M: GradedAlgebraMeta> {
-    terms: Vec<(M::Ring, M::Grade)>,
-}
+pub struct GradedAlgebra<M: GradedAlgebraMeta>(Vec<(M::Ring, M::Grade)>);
 
 impl<M: GradedAlgebraMeta> GradedAlgebra<M> {
     pub fn from_terms(terms: impl Iterator<Item = (M::Ring, M::Grade)>) -> Self {
-        Self {
-            terms: terms.collect(),
-        }
+        Self(terms.collect())
     }
 
     pub fn into_terms(self) -> impl Iterator<Item = (M::Ring, M::Grade)> {
-        self.terms.into_iter()
+        self.0.into_iter()
     }
 
     pub fn embed(coeff: M::Ring, grade: M::Grade) -> Self {
         Self::from_terms(std::iter::once((coeff, grade)))
     }
+
+    pub fn embed_scalar(coeff: M::Ring) -> Self {
+        Self::embed(coeff, num::Zero::zero())
+    }
+
+    pub fn mul_scalar(self, coeff: M::Ring) -> Self {
+        self * Self::embed_scalar(coeff)
+    }
 }
 
 impl<M: GradedAlgebraMeta> PartialEq for GradedAlgebra<M> {
-    fn eq(&self, other: &Self) -> bool {
-        num::Zero::is_zero(&(self.clone() - other.clone()))
+    fn eq(&self, rhs: &Self) -> bool {
+        num::Zero::is_zero(&(self.clone() - rhs.clone()))
     }
 }
 
@@ -86,9 +90,7 @@ impl<M: GradedAlgebraMeta> std::ops::Mul for GradedAlgebra<M> {
                 .into_iter()
                 .map(|(grade, chunk)| {
                     (
-                        chunk.fold(<M::Ring as num::Zero>::zero(), |acc_coeff, (coeff, _)| {
-                            acc_coeff + coeff
-                        }),
+                        chunk.fold(num::Zero::zero(), |acc_coeff, (coeff, _)| acc_coeff + coeff),
                         grade.clone(),
                     )
                 })
@@ -99,21 +101,21 @@ impl<M: GradedAlgebraMeta> std::ops::Mul for GradedAlgebra<M> {
 
 impl<M: GradedAlgebraMeta> std::ops::AddAssign for GradedAlgebra<M> {
     fn add_assign(&mut self, rhs: Self) {
-        let lhs = std::mem::replace(self, <Self as num::Zero>::zero());
+        let lhs = std::mem::replace(self, num::Zero::zero());
         *self = lhs + rhs;
     }
 }
 
 impl<M: GradedAlgebraMeta> std::ops::SubAssign for GradedAlgebra<M> {
     fn sub_assign(&mut self, rhs: Self) {
-        let lhs = std::mem::replace(self, <Self as num::Zero>::zero());
+        let lhs = std::mem::replace(self, num::Zero::zero());
         *self = lhs - rhs;
     }
 }
 
 impl<M: GradedAlgebraMeta> std::ops::MulAssign for GradedAlgebra<M> {
     fn mul_assign(&mut self, rhs: Self) {
-        let lhs = std::mem::replace(self, <Self as num::Zero>::zero());
+        let lhs = std::mem::replace(self, num::Zero::zero());
         *self = lhs * rhs;
     }
 }
@@ -130,10 +132,7 @@ impl<M: GradedAlgebraMeta> num::Zero for GradedAlgebra<M> {
 
 impl<M: GradedAlgebraMeta> num::One for GradedAlgebra<M> {
     fn one() -> Self {
-        Self::embed(
-            <M::Ring as num::One>::one(),
-            <M::Grade as num::Zero>::zero(),
-        )
+        Self::embed(num::One::one(), num::Zero::zero())
     }
 }
 

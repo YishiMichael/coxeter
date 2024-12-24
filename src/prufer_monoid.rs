@@ -1,12 +1,11 @@
 use alga::general as alg;
-use num::rational::Ratio;
 
 #[derive(Clone, Copy, Debug)]
-pub struct PruferMonoid<T>(Ratio<T>);
+pub struct PruferMonoid<T>(num_rational::Ratio<T>);
 
 impl<T: Clone + num::Integer> PruferMonoid<T> {
     #[inline]
-    pub fn new(ratio: Ratio<T>) -> Self {
+    pub fn new(ratio: num_rational::Ratio<T>) -> Self {
         Self(ratio.clone() - ratio.floor())
     }
 
@@ -23,22 +22,22 @@ impl<T: Clone + num::Integer> PruferMonoid<T> {
 
 impl<T: Clone + num::Integer> Ord for PruferMonoid<T> {
     #[inline]
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.0.cmp(&other.0)
+    fn cmp(&self, rhs: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&rhs.0)
     }
 }
 
 impl<T: Clone + num::Integer> PartialOrd for PruferMonoid<T> {
     #[inline]
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.0.partial_cmp(&other.0)
+    fn partial_cmp(&self, rhs: &Self) -> Option<std::cmp::Ordering> {
+        self.0.partial_cmp(&rhs.0)
     }
 }
 
 impl<T: Clone + num::Integer> PartialEq for PruferMonoid<T> {
     #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        self.0.eq(&other.0)
+    fn eq(&self, rhs: &Self) -> bool {
+        self.0.eq(&rhs.0)
     }
 }
 
@@ -79,7 +78,7 @@ impl<T: Clone + num::Integer + num::traits::NumAssign> std::ops::SubAssign for P
 impl<T: Clone + num::Integer> num::Zero for PruferMonoid<T> {
     #[inline]
     fn zero() -> Self {
-        Self::new(Ratio::zero())
+        Self::new(num_rational::Ratio::zero())
     }
 
     #[inline]
