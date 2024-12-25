@@ -1,32 +1,63 @@
 use alga::general as alg;
 use itertools::Itertools;
-use petgraph::visit::NodeIndexable;
 
 use super::polynomial::Polynomial;
 
 #[derive(Clone)]
-pub struct SquareMatrix<T, const N: usize>(
+pub struct SquareMatrix<T>(
     petgraph::matrix_graph::MatrixGraph<(), T, petgraph::Directed, Option<T>, usize>,
 );
 
-impl<T: alg::Ring, const N: usize> SquareMatrix<T, N> {
-    pub fn from_fn<F>(mut f: F) -> Self
+impl<T: alg::RingCommutative> SquareMatrix<T> {
+    pub fn from_fn<F>(dimension: usize, mut f: F) -> Self
     where
         F: FnMut(usize, usize) -> T,
     {
         Self(petgraph::matrix_graph::MatrixGraph::from_edges(
-            (0..N).cartesian_product(0..N).map(|(i, j)| (i, j, f(i, j))),
+            (0..dimension)
+                .cartesian_product(0..dimension)
+                .map(|(i, j)| (i, j, f(i, j))),
         ))
     }
 
+    pub fn zero(dimension: usize) -> Self {
+        Self::from_fn(dimension, |_, _| T::zero())
+    }
+
+    pub fn is_zero(&self) -> bool {
+        (0..self.dimension())
+            .cartesian_product(0..self.dimension())
+            .all(|(i, j)| self.get(i, j).is_zero())
+    }
+
+    pub fn one(dimension: usize) -> Self {
+        Self::from_fn(dimension, |i, j| if i == j { T::one() } else { T::zero() })
+    }
+
+    pub fn is_one(&self) -> bool {
+        (0..self.dimension())
+            .cartesian_product(0..self.dimension())
+            .all(|(i, j)| {
+                if i == j {
+                    self.get(i, j).is_one()
+                } else {
+                    self.get(i, j).is_zero()
+                }
+            })
+    }
+
+    pub fn dimension(&self) -> usize {
+        self.0.node_count()
+    }
+
     pub fn get(&self, i: usize, j: usize) -> &T {
-        self.0
-            .edge_weight(self.0.from_index(i), self.0.from_index(j))
+        let indexing = |index| petgraph::visit::NodeIndexable::from_index(&self.0, index);
+        self.0.edge_weight(indexing(i), indexing(j))
     }
 
     pub fn get_mut(&mut self, i: usize, j: usize) -> &mut T {
-        self.0
-            .edge_weight_mut(self.0.from_index(i), self.0.from_index(j))
+        let indexing = |index| petgraph::visit::NodeIndexable::from_index(&self.0, index);
+        self.0.edge_weight_mut(indexing(i), indexing(j))
     }
 
     pub fn replace(&mut self, i: usize, j: usize, src: T) -> T {
@@ -38,12 +69,37 @@ impl<T: alg::Ring, const N: usize> SquareMatrix<T, N> {
     }
 
     pub fn transpose(mut self) -> Self {
-        Self::from_fn(|i, j| self.take(j, i))
+        Self::from_fn(self.dimension(), |i, j| self.take(j, i))
+    }
+
+    pub fn order_unipotent(&self) -> usize {
+        std::iter::repeat(self.clone())
+            .scan(SquareMatrix::one(self.dimension()), |matrix_acc, matrix| {
+                let matrix_acc_clone = matrix_acc.clone();
+                *matrix_acc *= matrix;
+                Some(matrix_acc_clone)
+            })
+            .enumerate()
+            .skip(1)
+            .find(|(_, matrix)| matrix.is_one())
+            .map(|(order, _)| order)
+            .unwrap()
+    }
+
+    pub fn inverse_one_minus_nilpotent(&self) -> Self {
+        std::iter::repeat(self.clone())
+            .scan(SquareMatrix::one(self.dimension()), |matrix_acc, matrix| {
+                let matrix_acc_clone = matrix_acc.clone();
+                *matrix_acc *= matrix;
+                Some(matrix_acc_clone)
+            })
+            .take(self.dimension())
+            .fold(SquareMatrix::zero(self.dimension()), std::ops::Add::add)
     }
 
     pub fn determinant(&self) -> T {
-        (0..N)
-            .permutations(N)
+        (0..self.dimension())
+            .permutations(self.dimension())
             .map(|permutation| {
                 let neg_sign = permutation
                     .iter()
@@ -56,7 +112,7 @@ impl<T: alg::Ring, const N: usize> SquareMatrix<T, N> {
                         }
                     })
                     .fold(false, std::ops::BitXor::bitxor);
-                let product = (0..N)
+                let product = (0..self.dimension())
                     .map(|i| self.get(i, permutation[i]))
                     .fold(T::one(), |product, entry| product * entry.clone());
                 if neg_sign {
@@ -67,11 +123,9 @@ impl<T: alg::Ring, const N: usize> SquareMatrix<T, N> {
             })
             .fold(T::zero(), |product_acc, product| product_acc + product)
     }
-}
 
-impl<T: alg::RingCommutative, const N: usize> SquareMatrix<T, N> {
     pub fn characteristic_polynomial(&self) -> Polynomial<T> {
-        SquareMatrix::<Polynomial<T>, N>::from_fn(|i, j| {
+        SquareMatrix::<Polynomial<T>>::from_fn(self.dimension(), |i, j| {
             (if i == j {
                 Polynomial::monomial(T::one(), 1)
             } else {
@@ -82,123 +136,62 @@ impl<T: alg::RingCommutative, const N: usize> SquareMatrix<T, N> {
     }
 }
 
-impl<T: alg::Ring, const N: usize> PartialEq for SquareMatrix<T, N> {
-    fn eq(&self, rhs: &Self) -> bool {
-        (0..N)
-            .cartesian_product(0..N)
-            .all(|(i, j)| self.get(i, j) == rhs.get(i, j))
-    }
-}
-
-impl<T: alg::Ring, const N: usize> std::ops::Neg for SquareMatrix<T, N> {
+impl<T: alg::RingCommutative> std::ops::Neg for SquareMatrix<T> {
     type Output = Self;
 
     fn neg(mut self) -> Self {
-        Self::from_fn(|i, j| -self.take(i, j))
+        Self::from_fn(self.dimension(), |i, j| -self.take(i, j))
     }
 }
 
-impl<T: alg::Ring, const N: usize> std::ops::Add for SquareMatrix<T, N> {
+impl<T: alg::RingCommutative> std::ops::Add for SquareMatrix<T> {
     type Output = Self;
 
     fn add(mut self, mut rhs: Self) -> Self {
-        Self::from_fn(|i, j| self.take(i, j) + rhs.take(i, j))
+        assert_eq!(self.dimension(), rhs.dimension());
+        Self::from_fn(self.dimension(), |i, j| self.take(i, j) + rhs.take(i, j))
     }
 }
 
-impl<T: alg::Ring, const N: usize> std::ops::Sub for SquareMatrix<T, N> {
+impl<T: alg::RingCommutative> std::ops::Sub for SquareMatrix<T> {
     type Output = Self;
 
-    fn sub(self, rhs: Self) -> Self {
-        self + -rhs
+    fn sub(mut self, mut rhs: Self) -> Self {
+        assert_eq!(self.dimension(), rhs.dimension());
+        Self::from_fn(self.dimension(), |i, j| self.take(i, j) - rhs.take(i, j))
     }
 }
 
-impl<T: alg::Ring, const N: usize> std::ops::Mul for SquareMatrix<T, N> {
+impl<T: alg::RingCommutative> std::ops::Mul for SquareMatrix<T> {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self {
-        Self::from_fn(|i, j| {
-            (0..N)
+        assert_eq!(self.dimension(), rhs.dimension());
+        Self::from_fn(self.dimension(), |i, j| {
+            (0..self.dimension())
                 .map(|k| self.get(i, k).clone() * rhs.get(k, j).clone())
                 .fold(T::zero(), T::add)
         })
     }
 }
 
-impl<T: alg::Ring, const N: usize> std::ops::AddAssign for SquareMatrix<T, N> {
+impl<T: alg::RingCommutative> std::ops::AddAssign for SquareMatrix<T> {
     fn add_assign(&mut self, rhs: Self) {
-        let lhs = std::mem::replace(self, num::Zero::zero());
+        let lhs = std::mem::replace(self, Self::zero(0));
         *self = lhs + rhs;
     }
 }
 
-impl<T: alg::Ring, const N: usize> std::ops::SubAssign for SquareMatrix<T, N> {
+impl<T: alg::RingCommutative> std::ops::SubAssign for SquareMatrix<T> {
     fn sub_assign(&mut self, rhs: Self) {
-        let lhs = std::mem::replace(self, num::Zero::zero());
+        let lhs = std::mem::replace(self, Self::zero(0));
         *self = lhs - rhs;
     }
 }
 
-impl<T: alg::Ring, const N: usize> std::ops::MulAssign for SquareMatrix<T, N> {
+impl<T: alg::RingCommutative> std::ops::MulAssign for SquareMatrix<T> {
     fn mul_assign(&mut self, rhs: Self) {
-        let lhs = std::mem::replace(self, num::Zero::zero());
+        let lhs = std::mem::replace(self, Self::zero(0));
         *self = lhs * rhs;
     }
 }
-
-impl<T: alg::Ring, const N: usize> num::Zero for SquareMatrix<T, N> {
-    fn zero() -> Self {
-        Self::from_fn(|_, _| T::zero())
-    }
-
-    fn is_zero(&self) -> bool {
-        (0..N)
-            .cartesian_product(0..N)
-            .all(|(i, j)| self.get(i, j).is_zero())
-    }
-}
-
-impl<T: alg::Ring, const N: usize> num::One for SquareMatrix<T, N> {
-    fn one() -> Self {
-        Self::from_fn(|i, j| if i == j { T::one() } else { T::zero() })
-    }
-}
-
-impl<T: alg::Ring, const N: usize> alg::AbstractMagma<alg::Additive> for SquareMatrix<T, N> {
-    fn operate(&self, rhs: &Self) -> Self {
-        self.clone() + rhs.clone()
-    }
-}
-impl<T: alg::Ring, const N: usize> alg::Identity<alg::Additive> for SquareMatrix<T, N> {
-    fn identity() -> Self {
-        num::Zero::zero()
-    }
-}
-impl<T: alg::Ring, const N: usize> alg::TwoSidedInverse<alg::Additive> for SquareMatrix<T, N> {
-    fn two_sided_inverse(&self) -> Self {
-        -self.clone()
-    }
-}
-impl<T: alg::Ring, const N: usize> alg::AbstractMagma<alg::Multiplicative> for SquareMatrix<T, N> {
-    fn operate(&self, rhs: &Self) -> Self {
-        self.clone() * rhs.clone()
-    }
-}
-impl<T: alg::Ring, const N: usize> alg::Identity<alg::Multiplicative> for SquareMatrix<T, N> {
-    fn identity() -> Self {
-        num::One::one()
-    }
-}
-impl<T: alg::Ring, const N: usize> alg::AbstractSemigroup<alg::Additive> for SquareMatrix<T, N> {}
-impl<T: alg::Ring, const N: usize> alg::AbstractMonoid<alg::Additive> for SquareMatrix<T, N> {}
-impl<T: alg::Ring, const N: usize> alg::AbstractQuasigroup<alg::Additive> for SquareMatrix<T, N> {}
-impl<T: alg::Ring, const N: usize> alg::AbstractLoop<alg::Additive> for SquareMatrix<T, N> {}
-impl<T: alg::Ring, const N: usize> alg::AbstractGroup<alg::Additive> for SquareMatrix<T, N> {}
-impl<T: alg::Ring, const N: usize> alg::AbstractGroupAbelian<alg::Additive> for SquareMatrix<T, N> {}
-impl<T: alg::Ring, const N: usize> alg::AbstractSemigroup<alg::Multiplicative>
-    for SquareMatrix<T, N>
-{
-}
-impl<T: alg::Ring, const N: usize> alg::AbstractMonoid<alg::Multiplicative> for SquareMatrix<T, N> {}
-impl<T: alg::Ring, const N: usize> alg::AbstractRing for SquareMatrix<T, N> {}

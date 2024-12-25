@@ -13,13 +13,13 @@ where
     R: alg::RingCommutative,
 {
     type Ring = R;
-    type Grade = u32;
+    type Grade = u64;
 }
 
 pub type Polynomial<R> = GradedAlgebra<PolynomialMeta<R>>;
 
 impl<R: alg::RingCommutative> Polynomial<R> {
-    pub fn monomial(coeff: R, exponent: u32) -> Self {
+    pub fn monomial(coeff: R, exponent: u64) -> Self {
         Self::embed(coeff, exponent)
     }
 

@@ -15,10 +15,10 @@ where
     R: alg::RingCommutative,
 {
     type Ring = R;
-    type Grade = PruferMonoid<u32>;
+    type Grade = PruferMonoid<u64>;
 
     fn annihilate(element: GradedAlgebra<Self>) -> GradedAlgebra<Self> {
-        fn prime_factors(n: u32) -> impl Iterator<Item = u32> {
+        fn prime_factors(n: u64) -> impl Iterator<Item = u64> {
             std::iter::repeat(()).scan((n, 2), |(n, p), _| {
                 if *n == 1 {
                     None
@@ -54,7 +54,7 @@ where
 pub type Cyclotomic<R> = GradedAlgebra<CyclotomicMeta<R>>;
 
 impl<R: alg::RingCommutative> Cyclotomic<R> {
-    pub fn root_of_unity(order: u32, exponent: u32) -> Self {
+    pub fn root_of_unity(order: u64, exponent: u64) -> Self {
         Self::embed(
             R::one(),
             PruferMonoid::new(num_rational::Ratio::new(exponent, order)),
