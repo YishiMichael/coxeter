@@ -1,143 +1,147 @@
 use alga::general as alg;
 
-#[derive(Clone)]
+#[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub struct BigRational(num_rational::BigRational);
 
 impl BigRational {
-    pub fn new(numer: num::BigInt, denom: num::BigInt) -> Self {
-        Self(num_rational::BigRational::new(numer, denom))
+    #[inline]
+    pub fn from(value: num_rational::BigRational) -> Self {
+        Self(value)
     }
-}
 
-impl PartialEq for BigRational {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.eq(&other.0)
+    #[inline]
+    pub fn get(&self) -> &num_rational::BigRational {
+        &self.0
     }
-}
 
-impl Eq for BigRational {}
-
-impl PartialOrd for BigRational {
-    fn partial_cmp(&self, rhs: &Self) -> Option<std::cmp::Ordering> {
-        self.0.partial_cmp(&rhs.0)
+    #[inline]
+    pub fn get_mut(&mut self) -> &mut num_rational::BigRational {
+        &mut self.0
     }
-}
 
-impl Ord for BigRational {
-    fn cmp(&self, rhs: &Self) -> std::cmp::Ordering {
-        self.0.cmp(&rhs.0)
+    #[inline]
+    pub fn take(self) -> num_rational::BigRational {
+        self.0
     }
 }
 
 impl std::iter::Sum for BigRational {
+    #[inline]
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        Self(iter.map(|x| x.0).sum())
+        Self::from(iter.map(|x| x.take()).sum())
     }
 }
 
 impl std::ops::Add for BigRational {
     type Output = Self;
 
+    #[inline]
     fn add(self, rhs: Self) -> Self::Output {
-        Self(self.0.add(rhs.0))
+        Self::from(self.take().add(rhs.take()))
     }
 }
 
 impl std::ops::AddAssign for BigRational {
+    #[inline]
     fn add_assign(&mut self, rhs: Self) {
-        self.0.add_assign(rhs.0);
+        self.get_mut().add_assign(rhs.take());
     }
 }
 
 impl std::ops::Sub for BigRational {
     type Output = Self;
 
+    #[inline]
     fn sub(self, rhs: Self) -> Self::Output {
-        Self(self.0.sub(rhs.0))
+        Self::from(self.take().sub(rhs.take()))
     }
 }
 
 impl std::ops::SubAssign for BigRational {
+    #[inline]
     fn sub_assign(&mut self, rhs: Self) {
-        self.0.sub_assign(rhs.0);
+        self.get_mut().sub_assign(rhs.take());
     }
 }
 
 impl num::Zero for BigRational {
+    #[inline]
     fn zero() -> Self {
-        Self(num_rational::BigRational::zero())
+        Self::from(num_rational::BigRational::zero())
     }
 
+    #[inline]
     fn is_zero(&self) -> bool {
-        self.0.is_zero()
-    }
-
-    fn set_zero(&mut self) {
-        self.0.set_zero();
+        self.get().is_zero()
     }
 }
 
 impl std::ops::Neg for BigRational {
     type Output = Self;
 
+    #[inline]
     fn neg(self) -> Self::Output {
-        Self(self.0.neg())
+        Self::from(self.take().neg())
     }
 }
 
 impl std::iter::Product for BigRational {
+    #[inline]
     fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
-        Self(iter.map(|x| x.0).product())
+        Self::from(iter.map(|x| x.take()).product())
     }
 }
 
 impl std::ops::Mul for BigRational {
     type Output = Self;
 
+    #[inline]
     fn mul(self, rhs: Self) -> Self::Output {
-        Self(self.0.mul(rhs.0))
+        Self::from(self.take().mul(rhs.take()))
     }
 }
 
 impl std::ops::MulAssign for BigRational {
+    #[inline]
     fn mul_assign(&mut self, rhs: Self) {
-        self.0.mul_assign(rhs.0);
+        self.get_mut().mul_assign(rhs.take());
     }
 }
 
 impl std::ops::Div for BigRational {
     type Output = Self;
 
+    #[inline]
     fn div(self, rhs: Self) -> Self::Output {
-        Self(self.0.div(rhs.0))
+        Self::from(self.take().div(rhs.take()))
     }
 }
 
 impl std::ops::DivAssign for BigRational {
+    #[inline]
     fn div_assign(&mut self, rhs: Self) {
-        self.0.div_assign(rhs.0);
+        self.get_mut().div_assign(rhs.take());
     }
 }
 
 impl num::One for BigRational {
+    #[inline]
     fn one() -> Self {
-        Self(num_rational::BigRational::one())
+        Self::from(num_rational::BigRational::one())
     }
 
+    #[inline]
     fn is_one(&self) -> bool {
-        self.0.is_one()
-    }
-
-    fn set_one(&mut self) {
-        self.0.set_one();
+        self.get().is_one()
     }
 }
 
 impl num::traits::Inv for BigRational {
     type Output = Self;
 
+    #[inline]
     fn inv(self) -> Self::Output {
-        Self(self.0.inv())
+        Self::from(self.take().inv())
     }
 }
 
