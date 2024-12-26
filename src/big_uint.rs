@@ -1,74 +1,108 @@
-use alga::general as alg;
+use num::Integer;
+use num::One;
+use num::Zero;
+
+use super::alg;
 
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub struct BigUint(num::BigUint);
 
 impl BigUint {
-    #[inline]
-    pub fn from(value: num::BigUint) -> Self {
-        Self(value)
+    pub fn lcm<I: IntoIterator<Item = Self>>(iter: I) -> Self {
+        Self(
+            iter.into_iter()
+                .fold(num::BigUint::one(), |lcm, num| lcm.lcm(&num.0)),
+        )
     }
 
-    #[inline]
-    pub fn get(&self) -> &num::BigUint {
-        &self.0
+    pub fn range(self) -> BigUintRange {
+        BigUintRange(num::iter::range(num::BigUint::zero(), self.0))
     }
 
-    #[inline]
-    pub fn get_mut(&mut self) -> &mut num::BigUint {
-        &mut self.0
-    }
-
-    #[inline]
-    pub fn take(self) -> num::BigUint {
-        self.0
+    pub fn prime_factors(self) -> PrimeFactors {
+        PrimeFactors {
+            n: self.0,
+            p: num::BigUint::from(2usize),
+        }
     }
 }
 
-impl std::iter::Sum for BigUint {
+impl alg::AdditiveMagma for BigUint {
     #[inline]
-    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        Self::from(iter.map(|x| x.take()).sum())
+    fn sum<I: IntoIterator<Item = Self>>(iter: I) -> Self {
+        Self(iter.into_iter().map(|x| x.0).sum())
     }
 }
 
-impl std::ops::Add for BigUint {
-    type Output = Self;
-
-    #[inline]
-    fn add(self, rhs: Self) -> Self::Output {
-        Self::from(self.take().add(rhs.take()))
-    }
-}
-
-impl std::ops::AddAssign for BigUint {
-    #[inline]
-    fn add_assign(&mut self, rhs: Self) {
-        self.get_mut().add_assign(rhs.take());
-    }
-}
-
-impl num::Zero for BigUint {
+impl alg::AdditiveIdentity for BigUint {
     #[inline]
     fn zero() -> Self {
-        Self::from(num::BigUint::zero())
+        Self(num::BigUint::zero())
     }
 
     #[inline]
     fn is_zero(&self) -> bool {
-        self.get().is_zero()
+        self.0.is_zero()
     }
 }
 
-impl alg::AbstractMagma<alg::Additive> for BigUint {
-    fn operate(&self, rhs: &Self) -> Self {
-        std::ops::Add::add(self.clone(), rhs.clone())
+impl alg::MultiplicativeMagma for BigUint {
+    #[inline]
+    fn product<I: IntoIterator<Item = Self>>(iter: I) -> Self {
+        Self(iter.into_iter().map(|x| x.0).product())
     }
 }
-impl alg::Identity<alg::Additive> for BigUint {
-    fn identity() -> Self {
-        num::Zero::zero()
+
+impl alg::MultiplicativeIdentity for BigUint {
+    #[inline]
+    fn one() -> Self {
+        Self(num::BigUint::one())
+    }
+
+    #[inline]
+    fn is_one(&self) -> bool {
+        self.0.is_one()
     }
 }
-impl alg::AbstractSemigroup<alg::Additive> for BigUint {}
-impl alg::AbstractMonoid<alg::Additive> for BigUint {}
+
+// impl From<num::BigUint> for BigUint {
+//     fn from(value: num::BigUint) -> Self {
+//         Self(value)
+//     }
+// }
+
+impl Into<num::BigUint> for BigUint {
+    fn into(self) -> num::BigUint {
+        self.0
+    }
+}
+
+pub struct BigUintRange(num::iter::Range<num::BigUint>);
+
+impl Iterator for BigUintRange {
+    type Item = BigUint;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next().map(BigUint)
+    }
+}
+
+pub struct PrimeFactors {
+    n: num::BigUint,
+    p: num::BigUint,
+}
+
+impl Iterator for PrimeFactors {
+    type Item = BigUint;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        (!self.n.is_one()).then(|| {
+            self.p = num::iter::range_from(self.p.clone())
+                .find(|p| self.n.is_multiple_of(p))
+                .unwrap();
+            self.n /= self.p.clone();
+            BigUint(self.n.clone())
+        })
+    }
+}
