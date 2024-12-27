@@ -1,7 +1,6 @@
 use itertools::Itertools;
 
 use super::alg;
-use super::big_uint::BigUint;
 use super::polynomial::Polynomial;
 
 #[derive(Clone)]
@@ -25,7 +24,7 @@ where
     }
 
     pub fn zero(dimension: usize) -> Self {
-        Self::from_fn(dimension, |_, _| T::zero())
+        Self::from_fn(dimension, |_, _| alg::AdditiveIdentity::zero())
     }
 
     pub fn is_zero(&self) -> bool {
@@ -35,7 +34,13 @@ where
     }
 
     pub fn one(dimension: usize) -> Self {
-        Self::from_fn(dimension, |i, j| if i == j { T::one() } else { T::zero() })
+        Self::from_fn(dimension, |i, j| {
+            if i == j {
+                alg::MultiplicativeIdentity::one()
+            } else {
+                alg::AdditiveIdentity::zero()
+            }
+        })
     }
 
     pub fn is_one(&self) -> bool {
@@ -61,7 +66,10 @@ where
 
     pub fn take(&mut self, i: usize, j: usize) -> T {
         let indexing = |index| petgraph::visit::NodeIndexable::from_index(&self.0, index);
-        std::mem::replace(self.0.edge_weight_mut(indexing(i), indexing(j)), T::zero())
+        std::mem::replace(
+            self.0.edge_weight_mut(indexing(i), indexing(j)),
+            alg::AdditiveIdentity::zero(),
+        )
     }
 
     pub fn transpose(mut self) -> Self {
@@ -94,48 +102,49 @@ where
     }
 
     pub fn determinant(&self) -> T {
-        T::sum(
-            (0..self.dimension())
-                .permutations(self.dimension())
-                .map(|permutation| {
-                    let neg_sign = permutation
-                        .iter()
-                        .combinations(2)
-                        .map(|index_pair| {
-                            if let [i, j] = index_pair.as_slice() {
-                                i > j
-                            } else {
-                                unreachable!();
-                            }
-                        })
-                        .fold(false, std::ops::BitXor::bitxor);
-                    let product = T::product(
-                        (0..self.dimension())
-                            .map(|i| self.get(i, permutation[i]))
-                            .cloned(),
-                    );
-                    if neg_sign {
-                        product.neg()
-                    } else {
-                        product
-                    }
-                }),
-        )
+        alg::AdditiveMagma::sum((0..self.dimension()).permutations(self.dimension()).map(
+            |permutation| {
+                let neg_sign = permutation
+                    .iter()
+                    .combinations(2)
+                    .map(|index_pair| {
+                        if let [i, j] = index_pair.as_slice() {
+                            i > j
+                        } else {
+                            unreachable!();
+                        }
+                    })
+                    .fold(false, std::ops::BitXor::bitxor);
+                let product = alg::MultiplicativeMagma::product(
+                    (0..self.dimension())
+                        .map(|i| self.get(i, permutation[i]))
+                        .cloned(),
+                );
+                if neg_sign {
+                    product.neg()
+                } else {
+                    product
+                }
+            },
+        ))
     }
 
     pub fn characteristic_polynomial(&self) -> Polynomial<T> {
-        SquareMatrix::<Polynomial<T>>::from_fn(self.dimension(), |i, j| {
-            <Polynomial<T> as alg::AdditiveMagma>::sum([
+        SquareMatrix::from_fn(self.dimension(), |i, j| {
+            alg::AdditiveMagma::add(
                 if i == j {
-                    Polynomial::monomial(T::one(), <BigUint as alg::MultiplicativeIdentity>::one())
+                    Polynomial::monomial(
+                        alg::MultiplicativeIdentity::one(),
+                        alg::MultiplicativeIdentity::one(),
+                    )
                 } else {
-                    <Polynomial<T> as alg::AdditiveIdentity>::zero()
+                    alg::AdditiveIdentity::zero()
                 },
-                <Polynomial<T> as alg::AdditiveInverse>::neg(Polynomial::monomial(
+                alg::AdditiveInverse::neg(Polynomial::monomial(
                     self.get(i, j).clone(),
-                    <BigUint as alg::AdditiveIdentity>::zero(),
+                    alg::AdditiveIdentity::zero(),
                 )),
-            ])
+            )
         })
         .determinant()
     }
@@ -161,7 +170,7 @@ where
     fn add(mut self, mut rhs: Self) -> Self {
         assert_eq!(self.dimension(), rhs.dimension());
         Self::from_fn(self.dimension(), |i, j| {
-            T::sum([self.take(i, j), rhs.take(i, j)])
+            alg::AdditiveMagma::add(self.take(i, j), rhs.take(i, j))
         })
     }
 }
@@ -175,7 +184,7 @@ where
     fn sub(mut self, mut rhs: Self) -> Self {
         assert_eq!(self.dimension(), rhs.dimension());
         Self::from_fn(self.dimension(), |i, j| {
-            T::sum([self.take(i, j), rhs.take(i, j).neg()])
+            alg::AdditiveMagma::add(self.take(i, j), rhs.take(i, j).neg())
         })
     }
 }
@@ -189,10 +198,9 @@ where
     fn mul(self, rhs: Self) -> Self {
         assert_eq!(self.dimension(), rhs.dimension());
         Self::from_fn(self.dimension(), |i, j| {
-            T::sum(
-                (0..self.dimension())
-                    .map(|k| T::product([self.get(i, k).clone(), rhs.get(k, j).clone()])),
-            )
+            alg::AdditiveMagma::sum((0..self.dimension()).map(|k| {
+                alg::MultiplicativeMagma::mul(self.get(i, k).clone(), rhs.get(k, j).clone())
+            }))
         })
     }
 }

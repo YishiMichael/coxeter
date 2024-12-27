@@ -41,33 +41,27 @@ where
     }
 
     pub fn embed_scalar(coeff: R) -> Self {
-        Self::embed(coeff, G::zero())
+        Self::embed(coeff, alg::AdditiveIdentity::zero())
     }
 }
-
-// impl<R, G> PartialEq for GradedAlgebra<R, G>
-// where
-//     R: alg::Ring + Clone,
-//     G: alg::AdditiveMonoid + Clone + std::cmp::Ord,
-// {
-//     fn eq(&self, rhs: &Self) -> bool {
-//         num::Zero::is_zero(&(self.clone() - rhs.clone()))
-//     }
-// }
 
 impl<R, G> alg::AdditiveMagma for GradedAlgebra<R, G>
 where
     R: alg::Ring + Clone,
     G: alg::AdditiveMonoid + Clone + std::cmp::Ord,
 {
-    fn sum<I: IntoIterator<Item = Self>>(iter: I) -> Self {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         Self::from_terms(
-            iter.into_iter()
-                .map(Self::take_terms)
+            iter.map(Self::take_terms)
                 .kmerge_by(|(_, grade_0), (_, grade_1)| grade_0 < grade_1)
                 .chunk_by(|(_, grade)| grade.clone())
                 .into_iter()
-                .map(|(grade, chunk)| (R::sum(chunk.map(|(coeff, _)| coeff)), grade.clone()))
+                .map(|(grade, chunk)| {
+                    (
+                        alg::AdditiveMagma::sum(chunk.map(|(coeff, _)| coeff)),
+                        grade.clone(),
+                    )
+                })
                 // self.into_terms()
                 // .merge_join_by(rhs.into_terms(), |(_, grade_0), (_, grade_1)| {
                 //     grade_0.cmp(grade_1)
@@ -110,20 +104,27 @@ where
     R: alg::Ring + Clone,
     G: alg::AdditiveMonoid + Clone + std::cmp::Ord,
 {
-    fn product<I: IntoIterator<Item = Self>>(iter: I) -> Self {
+    fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
         Self::from_terms(
-            iter.into_iter()
-                .map(Self::take_terms)
+            iter.map(Self::take_terms)
                 .map(|terms| terms.collect::<Vec<_>>())
                 .multi_cartesian_product()
                 .map(|terms| {
                     let (coeffs, grades) = terms.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
-                    (R::product(coeffs.into_iter()), G::sum(grades.into_iter()))
+                    (
+                        alg::MultiplicativeMagma::product(coeffs.into_iter()),
+                        alg::AdditiveMagma::sum(grades.into_iter()),
+                    )
                 })
                 .sorted_by_key(|(_, grade)| grade.clone())
                 .chunk_by(|(_, grade)| grade.clone())
                 .into_iter()
-                .map(|(grade, chunk)| (R::sum(chunk.map(|(coeff, _)| coeff)), grade.clone()))
+                .map(|(grade, chunk)| {
+                    (
+                        alg::AdditiveMagma::sum(chunk.map(|(coeff, _)| coeff)),
+                        grade.clone(),
+                    )
+                })
                 .filter(|(coeff, _)| !coeff.is_zero()),
             // .sorted_by_key(|(_, grade)| grade.clone())
             // .chunk_by(|(_, grade)| grade.clone())
@@ -145,7 +146,10 @@ where
     G: alg::AdditiveMonoid + Clone + std::cmp::Ord,
 {
     fn one() -> Self {
-        Self::from_terms(std::iter::once((R::one(), G::zero())))
+        Self::from_terms(std::iter::once((
+            alg::MultiplicativeIdentity::one(),
+            alg::AdditiveIdentity::zero(),
+        )))
     }
 
     fn is_one(&self) -> bool {

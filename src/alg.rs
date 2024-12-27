@@ -1,5 +1,9 @@
-pub trait AdditiveMagma {
-    fn sum<I: IntoIterator<Item = Self>>(iter: I) -> Self;
+pub trait AdditiveMagma: Sized {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self;
+
+    fn add(self, rhs: Self) -> Self {
+        Self::sum([self, rhs].into_iter())
+    }
 }
 
 pub trait AdditiveIdentity {
@@ -11,8 +15,12 @@ pub trait AdditiveInverse {
     fn neg(self) -> Self;
 }
 
-pub trait MultiplicativeMagma {
-    fn product<I: IntoIterator<Item = Self>>(iter: I) -> Self;
+pub trait MultiplicativeMagma: Sized {
+    fn product<I: Iterator<Item = Self>>(iter: I) -> Self;
+
+    fn mul(self, rhs: Self) -> Self {
+        Self::product([self, rhs].into_iter())
+    }
 }
 
 pub trait MultiplicativeIdentity {

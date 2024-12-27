@@ -1,6 +1,3 @@
-use num::Zero;
-use std::ops::Neg;
-
 use super::alg;
 use super::big_uint::BigUint;
 
@@ -14,39 +11,37 @@ impl PruferGroup {
     }
 }
 
-impl alg::AdditiveMagma for PruferGroup {
-    #[inline]
-    fn sum<I: IntoIterator<Item = Self>>(iter: I) -> Self {
-        Self(Self::wrap(
-            iter.into_iter().map(|x| x.0).sum::<num::BigRational>(),
-        ))
-    }
-}
-
-impl alg::AdditiveIdentity for PruferGroup {
-    #[inline]
-    fn zero() -> Self {
-        Self(num::BigRational::zero())
-    }
-
-    #[inline]
-    fn is_zero(&self) -> bool {
-        self.0.is_zero()
-    }
-}
-
-impl alg::AdditiveInverse for PruferGroup {
-    #[inline]
-    fn neg(self) -> Self {
-        Self(Self::wrap(self.0.neg()))
-    }
-}
-
 impl From<(BigUint, BigUint)> for PruferGroup {
     fn from((numer, denom): (BigUint, BigUint)) -> Self {
         Self(Self::wrap(num::BigRational::new(
             <BigUint as Into<num::BigUint>>::into(numer).into(),
             <BigUint as Into<num::BigUint>>::into(denom).into(),
         )))
+    }
+}
+
+impl alg::AdditiveMagma for PruferGroup {
+    #[inline]
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        Self(Self::wrap(iter.map(|x| x.0).sum::<num::BigRational>()))
+    }
+}
+
+impl alg::AdditiveIdentity for PruferGroup {
+    #[inline]
+    fn zero() -> Self {
+        Self(num::Zero::zero())
+    }
+
+    #[inline]
+    fn is_zero(&self) -> bool {
+        num::Zero::is_zero(&self.0)
+    }
+}
+
+impl alg::AdditiveInverse for PruferGroup {
+    #[inline]
+    fn neg(self) -> Self {
+        Self(Self::wrap(std::ops::Neg::neg(self.0)))
     }
 }

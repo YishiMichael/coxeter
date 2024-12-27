@@ -70,7 +70,7 @@ use super::big_uint::BigUint;
 use super::graded_algebra::GradedAlgebra;
 use super::prufer_group::PruferGroup;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub struct Cyclotomic {
     order: BigUint,
     value: GradedAlgebra<BigRational, PruferGroup>,
@@ -102,11 +102,9 @@ impl Cyclotomic {
         let exponent = exponent.into();
         Self {
             order: order.clone(),
-            value: <GradedAlgebra<BigRational, PruferGroup> as alg::MultiplicativeMagma>::product(
-                [
-                    Self::root_of_unity_raw_value(order.clone(), exponent),
-                    Self::balancer(order.prime_factors()),
-                ],
+            value: alg::MultiplicativeMagma::mul(
+                Self::root_of_unity_raw_value(order.clone(), exponent),
+                Self::balancer(order.prime_factors()),
             ),
         }
     }
@@ -116,7 +114,7 @@ impl Cyclotomic {
         exponent: BigUint,
     ) -> GradedAlgebra<BigRational, PruferGroup> {
         GradedAlgebra::embed(
-            <BigRational as alg::MultiplicativeIdentity>::one(),
+            alg::MultiplicativeIdentity::one(),
             PruferGroup::from((exponent.into(), order.into())),
         )
     }
@@ -125,30 +123,22 @@ impl Cyclotomic {
         prime_factors: I,
         //value: GradedAlgebra<BigRational, PruferGroup>,
     ) -> GradedAlgebra<BigRational, PruferGroup> {
-        <GradedAlgebra<BigRational, PruferGroup> as alg::MultiplicativeMagma>::product(
-            prime_factors.map(|factor| {
-                <GradedAlgebra<BigRational, PruferGroup> as alg::MultiplicativeMagma>::product([
-                    GradedAlgebra::embed_scalar(
-                        (
-                            <BigUint as alg::MultiplicativeIdentity>::one(),
+        alg::MultiplicativeMagma::product(prime_factors.map(|factor| {
+            alg::MultiplicativeMagma::mul(
+                GradedAlgebra::embed_scalar(
+                    (alg::MultiplicativeIdentity::one(), factor.clone()).into(),
+                ),
+                alg::AdditiveMagma::sum(factor.clone().range().map(|i| {
+                    alg::AdditiveMagma::add(
+                        Self::root_of_unity_raw_value(
                             factor.clone(),
-                        )
-                            .into(),
-                    ),
-                    <GradedAlgebra<BigRational, PruferGroup> as alg::AdditiveMagma>::sum(
-                        factor.clone().range().flat_map(|i| {
-                            [
-                                Self::root_of_unity_raw_value(
-                                    factor.clone(),
-                                    <BigUint as alg::AdditiveIdentity>::zero(),
-                                ),
-                                Self::root_of_unity_raw_value(factor.clone(), i),
-                            ]
-                        }),
-                    ),
-                ])
-            }),
-        )
+                            alg::AdditiveIdentity::zero(),
+                        ),
+                        Self::root_of_unity_raw_value(factor.clone(), i),
+                    )
+                })),
+            )
+        }))
     }
 
     fn raise_order(
@@ -169,23 +159,32 @@ impl Cyclotomic {
             if additional_prime_factors.is_empty() {
                 value
             } else {
-                <GradedAlgebra<BigRational, PruferGroup> as alg::MultiplicativeMagma>::product([
+                alg::MultiplicativeMagma::mul(
                     value,
                     Self::balancer(additional_prime_factors.into_iter()),
-                ])
+                )
             }
         }
     }
 }
 
+impl PartialEq for Cyclotomic {
+    fn eq(&self, rhs: &Self) -> bool {
+        alg::AdditiveIdentity::is_zero(&alg::AdditiveMagma::add(
+            self.clone(),
+            alg::AdditiveInverse::neg(rhs.clone()),
+        ))
+    }
+}
+
 impl alg::AdditiveMagma for Cyclotomic {
     #[inline]
-    fn sum<I: IntoIterator<Item = Self>>(iter: I) -> Self {
-        let elements = iter.into_iter().collect::<Vec<_>>();
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        let elements = iter.collect::<Vec<_>>();
         let order = BigUint::lcm(elements.iter().map(|element| element.order.clone()));
         Self {
             order: order.clone(),
-            value: GradedAlgebra::<BigRational, PruferGroup>::sum(
+            value: alg::AdditiveMagma::sum(
                 elements
                     .into_iter()
                     .map(|element| Self::raise_order(element.value, element.order, order.clone())),
@@ -198,8 +197,8 @@ impl alg::AdditiveIdentity for Cyclotomic {
     #[inline]
     fn zero() -> Self {
         Self {
-            order: <BigUint as alg::MultiplicativeIdentity>::one(),
-            value: GradedAlgebra::<BigRational, PruferGroup>::zero(),
+            order: alg::MultiplicativeIdentity::one(),
+            value: alg::AdditiveIdentity::zero(),
         }
     }
 
@@ -221,12 +220,12 @@ impl alg::AdditiveInverse for Cyclotomic {
 
 impl alg::MultiplicativeMagma for Cyclotomic {
     #[inline]
-    fn product<I: IntoIterator<Item = Self>>(iter: I) -> Self {
-        let elements = iter.into_iter().collect::<Vec<_>>();
+    fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
+        let elements = iter.collect::<Vec<_>>();
         let order = BigUint::lcm(elements.iter().map(|element| element.order.clone()));
         Self {
             order: order.clone(),
-            value: GradedAlgebra::<BigRational, PruferGroup>::product(
+            value: alg::MultiplicativeMagma::product(
                 elements
                     .into_iter()
                     .map(|element| Self::raise_order(element.value, element.order, order.clone())),
@@ -239,8 +238,8 @@ impl alg::MultiplicativeIdentity for Cyclotomic {
     #[inline]
     fn one() -> Self {
         Self {
-            order: <BigUint as alg::MultiplicativeIdentity>::one(),
-            value: GradedAlgebra::<BigRational, PruferGroup>::one(),
+            order: alg::MultiplicativeIdentity::one(),
+            value: alg::AdditiveIdentity::zero(),
         }
     }
 

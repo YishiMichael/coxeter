@@ -16,8 +16,8 @@ where
     }
 
     pub fn eval(&self, value: R) -> R {
-        R::sum(self.0.get_terms().map(|(coeff, exponent)| {
-            R::product(
+        alg::AdditiveMagma::sum(self.0.get_terms().map(|(coeff, exponent)| {
+            alg::MultiplicativeMagma::product(
                 std::iter::once(coeff.clone())
                     .chain(exponent.clone().range().map(|_| value.clone())),
             )
@@ -30,10 +30,8 @@ where
     R: alg::Ring + Clone,
 {
     #[inline]
-    fn sum<I: IntoIterator<Item = Self>>(iter: I) -> Self {
-        Self(GradedAlgebra::<R, BigUint>::sum(
-            iter.into_iter().map(|x| x.0),
-        ))
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        Self(alg::AdditiveMagma::sum(iter.map(|x| x.0)))
     }
 }
 
@@ -43,7 +41,7 @@ where
 {
     #[inline]
     fn zero() -> Self {
-        Self(GradedAlgebra::<R, BigUint>::zero())
+        Self(alg::AdditiveIdentity::zero())
     }
 
     #[inline]
@@ -67,10 +65,8 @@ where
     R: alg::Ring + Clone,
 {
     #[inline]
-    fn product<I: IntoIterator<Item = Self>>(iter: I) -> Self {
-        Self(GradedAlgebra::<R, BigUint>::product(
-            iter.into_iter().map(|x| x.0),
-        ))
+    fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
+        Self(alg::MultiplicativeMagma::product(iter.map(|x| x.0)))
     }
 }
 
@@ -80,7 +76,7 @@ where
 {
     #[inline]
     fn one() -> Self {
-        Self(GradedAlgebra::<R, BigUint>::one())
+        Self(alg::MultiplicativeIdentity::one())
     }
 
     #[inline]

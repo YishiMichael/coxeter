@@ -10,42 +10,44 @@ pub mod square_matrix;
 
 #[cfg(test)]
 mod tests {
+    use super::alg;
+    use super::alg::AdditiveIdentity;
+    use super::alg::AdditiveInverse;
 
     #[test]
     fn test_cyclotomic() {
-        // use super::graded_algebra::GradedAlgebraMeta;
-
-        // use super::cyclotomic::Cyclotomic;
-        // use super::cyclotomic::CyclotomicMeta;
-        // assert!(Cyclotomic::<i64>::root_of_unity(3, 0) == Cyclotomic::<i64>::root_of_unity(2, 0));
-        // dbg!(CyclotomicMeta::annihilate(
-        //     Cyclotomic::<i64>::root_of_unity(3, 0)
-        //         + Cyclotomic::<i64>::root_of_unity(3, 1)
-        //         + Cyclotomic::<i64>::root_of_unity(3, 2)
-        // ));
-        // assert!(
-        //     -Cyclotomic::<i64>::root_of_unity(3, 0)
-        //         == Cyclotomic::<i64>::root_of_unity(3, 1) + Cyclotomic::<i64>::root_of_unity(3, 2)
-        // );
-        // assert!(
-        //     -Cyclotomic::<i64>::root_of_unity(2, 0)
-        //         == Cyclotomic::<i64>::root_of_unity(6, 2) + Cyclotomic::<i64>::root_of_unity(3, 2)
-        // );
-        // dbg!(CyclotomicMeta::annihilate(
-        //     Cyclotomic::<i64>::root_of_unity(5, 1)
-        //         + Cyclotomic::<i64>::root_of_unity(5, 2)
-        //         + Cyclotomic::<i64>::root_of_unity(5, 3)
-        //         + Cyclotomic::<i64>::root_of_unity(5, 4)
-        //         - Cyclotomic::<i64>::root_of_unity(3, 1)
-        //         - Cyclotomic::<i64>::root_of_unity(3, 2)
-        // ));
-        // assert!(
-        //     Cyclotomic::<i64>::root_of_unity(5, 1)
-        //         + Cyclotomic::<i64>::root_of_unity(5, 2)
-        //         + Cyclotomic::<i64>::root_of_unity(5, 3)
-        //         + Cyclotomic::<i64>::root_of_unity(5, 4)
-        //         == Cyclotomic::<i64>::root_of_unity(3, 1) + Cyclotomic::<i64>::root_of_unity(3, 2)
-        // );
+        use super::cyclotomic::Cyclotomic;
+        assert!(Cyclotomic::root_of_unity(3, 0) == Cyclotomic::root_of_unity(2, 0));
+        //assert!(alg::AdditiveMagma::sum(
+        //    [
+        //        Cyclotomic::root_of_unity(3, 1),
+        //        Cyclotomic::root_of_unity(3, 2),
+        //        Cyclotomic::root_of_unity(3, 0),
+        //    ]
+        //    .into_iter()
+        //)
+        //.is_zero());
+        //assert!(alg::AdditiveMagma::sum(
+        //    [
+        //        Cyclotomic::root_of_unity(2, 0),
+        //        Cyclotomic::root_of_unity(6, 2),
+        //        Cyclotomic::root_of_unity(3, 2),
+        //    ]
+        //    .into_iter()
+        //)
+        //.is_zero());
+        //assert!(alg::AdditiveMagma::sum(
+        //    [
+        //        Cyclotomic::root_of_unity(5, 1),
+        //        Cyclotomic::root_of_unity(5, 2),
+        //        Cyclotomic::root_of_unity(5, 3),
+        //        Cyclotomic::root_of_unity(5, 4),
+        //        Cyclotomic::root_of_unity(3, 1).neg(),
+        //        Cyclotomic::root_of_unity(3, 2).neg(),
+        //    ]
+        //    .into_iter()
+        //)
+        //.is_zero());
     }
 
     #[test]

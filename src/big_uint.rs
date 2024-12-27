@@ -1,22 +1,15 @@
-use num::Integer;
-use num::One;
-use num::Zero;
-
 use super::alg;
 
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub struct BigUint(num::BigUint);
 
 impl BigUint {
-    pub fn lcm<I: IntoIterator<Item = Self>>(iter: I) -> Self {
-        Self(
-            iter.into_iter()
-                .fold(num::BigUint::one(), |lcm, num| lcm.lcm(&num.0)),
-        )
+    pub fn lcm<I: Iterator<Item = Self>>(iter: I) -> Self {
+        Self(iter.fold(num::One::one(), |lcm, num| num::Integer::lcm(&lcm, &num.0)))
     }
 
     pub fn range(self) -> BigUintRange {
-        BigUintRange(num::iter::range(num::BigUint::zero(), self.0))
+        BigUintRange(num::iter::range(num::Zero::zero(), self.0))
     }
 
     pub fn prime_factors(self) -> PrimeFactors {
@@ -27,49 +20,17 @@ impl BigUint {
     }
 }
 
-impl alg::AdditiveMagma for BigUint {
-    #[inline]
-    fn sum<I: IntoIterator<Item = Self>>(iter: I) -> Self {
-        Self(iter.into_iter().map(|x| x.0).sum())
+impl From<num::BigUint> for BigUint {
+    fn from(value: num::BigUint) -> Self {
+        Self(value)
     }
 }
 
-impl alg::AdditiveIdentity for BigUint {
-    #[inline]
-    fn zero() -> Self {
-        Self(num::BigUint::zero())
-    }
-
-    #[inline]
-    fn is_zero(&self) -> bool {
-        self.0.is_zero()
+impl From<usize> for BigUint {
+    fn from(value: usize) -> Self {
+        Self(value.into())
     }
 }
-
-impl alg::MultiplicativeMagma for BigUint {
-    #[inline]
-    fn product<I: IntoIterator<Item = Self>>(iter: I) -> Self {
-        Self(iter.into_iter().map(|x| x.0).product())
-    }
-}
-
-impl alg::MultiplicativeIdentity for BigUint {
-    #[inline]
-    fn one() -> Self {
-        Self(num::BigUint::one())
-    }
-
-    #[inline]
-    fn is_one(&self) -> bool {
-        self.0.is_one()
-    }
-}
-
-// impl From<num::BigUint> for BigUint {
-//     fn from(value: num::BigUint) -> Self {
-//         Self(value)
-//     }
-// }
 
 impl Into<num::BigUint> for BigUint {
     fn into(self) -> num::BigUint {
@@ -97,12 +58,50 @@ impl Iterator for PrimeFactors {
     type Item = BigUint;
 
     fn next(&mut self) -> Option<Self::Item> {
-        (!self.n.is_one()).then(|| {
+        (!num::One::is_one(&self.n)).then(|| {
             self.p = num::iter::range_from(self.p.clone())
-                .find(|p| self.n.is_multiple_of(p))
+                .find(|p| num::Integer::is_multiple_of(&self.n, p))
                 .unwrap();
             self.n /= self.p.clone();
             BigUint(self.n.clone())
         })
+    }
+}
+
+impl alg::AdditiveMagma for BigUint {
+    #[inline]
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        Self(iter.map(|x| x.0).sum())
+    }
+}
+
+impl alg::AdditiveIdentity for BigUint {
+    #[inline]
+    fn zero() -> Self {
+        Self(num::Zero::zero())
+    }
+
+    #[inline]
+    fn is_zero(&self) -> bool {
+        num::Zero::is_zero(&self.0)
+    }
+}
+
+impl alg::MultiplicativeMagma for BigUint {
+    #[inline]
+    fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
+        Self(iter.map(|x| x.0).product())
+    }
+}
+
+impl alg::MultiplicativeIdentity for BigUint {
+    #[inline]
+    fn one() -> Self {
+        Self(num::One::one())
+    }
+
+    #[inline]
+    fn is_one(&self) -> bool {
+        num::One::is_one(&self.0)
     }
 }
