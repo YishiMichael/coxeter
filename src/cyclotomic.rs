@@ -1,67 +1,3 @@
-// use alga::general as alg;
-// use itertools::Itertools;
-
-// use super::graded_algebra::GradedAlgebra;
-// use super::graded_algebra::GradedAlgebraMeta;
-// use super::prufer_monoid::PruferMonoid;
-
-// #[derive(Clone, Debug)]
-// pub struct CyclotomicMeta<R> {
-//     phantom: std::marker::PhantomData<R>,
-// }
-
-// impl<R> GradedAlgebraMeta for CyclotomicMeta<R>
-// where
-//     R: alg::RingCommutative,
-// {
-//     type Ring = R;
-//     type Grade = PruferMonoid<u64>;
-
-//     fn annihilate(element: GradedAlgebra<Self>) -> GradedAlgebra<Self> {
-//         fn prime_factors(n: u64) -> impl Iterator<Item = u64> {
-//             std::iter::repeat(()).scan((n, 2), |(n, p), _| {
-//                 if *n == 1 {
-//                     None
-//                 } else {
-//                     *p = (*p..).find(|p| *n % p == 0).unwrap();
-//                     *n /= *p;
-//                     Some(*p)
-//                 }
-//             })
-//         }
-
-//         prime_factors(
-//             element
-//                 .clone()
-//                 .into_terms()
-//                 .map(|(_, grade)| grade.denom().clone())
-//                 .fold(1, |common_multiple, denominator| {
-//                     num::Integer::lcm(&common_multiple, &denominator)
-//                 }),
-//         )
-//         .dedup()
-//         .map(|factor| {
-//             (1..factor)
-//                 .map(|i| {
-//                     Cyclotomic::root_of_unity(factor, 0) - Cyclotomic::root_of_unity(factor, i)
-//                 })
-//                 .fold(num::Zero::zero(), std::ops::Add::add)
-//         })
-//         .fold(element, std::ops::Mul::mul)
-//     }
-// }
-
-// pub type Cyclotomic<R> = GradedAlgebra<CyclotomicMeta<R>>;
-
-// impl<R: alg::RingCommutative> Cyclotomic<R> {
-//     pub fn root_of_unity(order: u64, exponent: u64) -> Self {
-//         Self::embed(
-//             R::one(),
-//             PruferMonoid::new(num::rational::Ratio::new(exponent, order)),
-//         )
-//     }
-// }
-
 use itertools::Itertools;
 
 use super::alg;
@@ -70,27 +6,10 @@ use super::big_uint::BigUint;
 use super::graded_algebra::GradedAlgebra;
 use super::prufer_group::PruferGroup;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Cyclotomic {
     order: BigUint,
     value: GradedAlgebra<BigRational, PruferGroup>,
-}
-
-impl Cyclotomic {
-    // #[inline]
-    // pub fn from(value: GradedAlgebra<BigRational, PruferGroup>) -> Self {
-    //     Self(value)
-    // }
-
-    // #[inline]
-    // pub fn get(&self) -> &GradedAlgebra<BigRational, PruferGroup> {
-    //     &self.0
-    // }
-
-    // #[inline]
-    // pub fn take(self) -> GradedAlgebra<BigRational, PruferGroup> {
-    //     self.0
-    // }
 }
 
 impl Cyclotomic {
@@ -121,7 +40,6 @@ impl Cyclotomic {
 
     fn balancer<I: Iterator<Item = BigUint>>(
         prime_factors: I,
-        //value: GradedAlgebra<BigRational, PruferGroup>,
     ) -> GradedAlgebra<BigRational, PruferGroup> {
         alg::MultiplicativeMagma::product(prime_factors.map(|factor| {
             alg::MultiplicativeMagma::mul(
@@ -129,7 +47,7 @@ impl Cyclotomic {
                     (alg::MultiplicativeIdentity::one(), factor.clone()).into(),
                 ),
                 alg::AdditiveMagma::sum(factor.clone().range().map(|i| {
-                    alg::AdditiveMagma::add(
+                    alg::AdditiveMagma::sub(
                         Self::root_of_unity_raw_value(
                             factor.clone(),
                             alg::AdditiveIdentity::zero(),
@@ -170,10 +88,7 @@ impl Cyclotomic {
 
 impl PartialEq for Cyclotomic {
     fn eq(&self, rhs: &Self) -> bool {
-        alg::AdditiveIdentity::is_zero(&alg::AdditiveMagma::add(
-            self.clone(),
-            alg::AdditiveInverse::neg(rhs.clone()),
-        ))
+        alg::AdditiveIdentity::is_zero(&alg::AdditiveMagma::sub(self.clone(), rhs.clone()))
     }
 }
 
@@ -204,7 +119,7 @@ impl alg::AdditiveIdentity for Cyclotomic {
 
     #[inline]
     fn is_zero(&self) -> bool {
-        self.eq(&Self::zero())
+        alg::AdditiveIdentity::is_zero(&self.value)
     }
 }
 
@@ -237,10 +152,7 @@ impl alg::MultiplicativeMagma for Cyclotomic {
 impl alg::MultiplicativeIdentity for Cyclotomic {
     #[inline]
     fn one() -> Self {
-        Self {
-            order: alg::MultiplicativeIdentity::one(),
-            value: alg::AdditiveIdentity::zero(),
-        }
+        Self::root_of_unity(1, 0)
     }
 
     #[inline]

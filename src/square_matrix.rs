@@ -131,7 +131,7 @@ where
 
     pub fn characteristic_polynomial(&self) -> Polynomial<T> {
         SquareMatrix::from_fn(self.dimension(), |i, j| {
-            alg::AdditiveMagma::add(
+            alg::AdditiveMagma::sub(
                 if i == j {
                     Polynomial::monomial(
                         alg::MultiplicativeIdentity::one(),
@@ -140,10 +140,7 @@ where
                 } else {
                     alg::AdditiveIdentity::zero()
                 },
-                alg::AdditiveInverse::neg(Polynomial::monomial(
-                    self.get(i, j).clone(),
-                    alg::AdditiveIdentity::zero(),
-                )),
+                Polynomial::monomial(self.get(i, j).clone(), alg::AdditiveIdentity::zero()),
             )
         })
         .determinant()
@@ -184,7 +181,7 @@ where
     fn sub(mut self, mut rhs: Self) -> Self {
         assert_eq!(self.dimension(), rhs.dimension());
         Self::from_fn(self.dimension(), |i, j| {
-            alg::AdditiveMagma::add(self.take(i, j), rhs.take(i, j).neg())
+            alg::AdditiveMagma::sub(self.take(i, j), rhs.take(i, j))
         })
     }
 }

@@ -4,6 +4,13 @@ pub trait AdditiveMagma: Sized {
     fn add(self, rhs: Self) -> Self {
         Self::sum([self, rhs].into_iter())
     }
+
+    fn sub(self, rhs: Self) -> Self
+    where
+        Self: AdditiveInverse,
+    {
+        self.add(rhs.neg())
+    }
 }
 
 pub trait AdditiveIdentity {
@@ -20,6 +27,13 @@ pub trait MultiplicativeMagma: Sized {
 
     fn mul(self, rhs: Self) -> Self {
         Self::product([self, rhs].into_iter())
+    }
+
+    fn div(self, rhs: Self) -> Self
+    where
+        Self: MultiplicativeInverse,
+    {
+        self.mul(rhs.inv())
     }
 }
 

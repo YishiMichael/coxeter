@@ -1,7 +1,7 @@
 use super::alg;
 use super::big_uint::BigUint;
 
-#[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct BigRational(num::BigRational);
 
 impl From<(BigUint, BigUint)> for BigRational {

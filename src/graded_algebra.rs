@@ -1,16 +1,8 @@
 use itertools::Itertools;
 
 use super::alg;
-// pub trait GradedAlgebraMeta: Clone {
-//     type Ring: alg::RingCommutative;
-//     type Grade: alg::AdditiveMonoid + Clone + std::cmp::Ord;
 
-//     fn annihilate(element: GradedAlgebra<Self>) -> GradedAlgebra<Self> {
-//         element
-//     }
-// }
-
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct GradedAlgebra<R, G>(Vec<(R, G)>);
 
 impl<R, G> GradedAlgebra<R, G> {
@@ -62,14 +54,6 @@ where
                         grade.clone(),
                     )
                 })
-                // self.into_terms()
-                // .merge_join_by(rhs.into_terms(), |(_, grade_0), (_, grade_1)| {
-                //     grade_0.cmp(grade_1)
-                // })
-                // .map(|merge_item| {
-                //     merge_item
-                //         .reduce(|(lhs_coeff, grade), (rhs_coeff, _)| (lhs_coeff + rhs_coeff, grade))
-                // })
                 .filter(|(coeff, _)| !coeff.is_zero()),
         )
     }
@@ -126,16 +110,6 @@ where
                     )
                 })
                 .filter(|(coeff, _)| !coeff.is_zero()),
-            // .sorted_by_key(|(_, grade)| grade.clone())
-            // .chunk_by(|(_, grade)| grade.clone())
-            // .into_iter()
-            // .map(|(grade, chunk)| {
-            //     (
-            //         chunk.fold(num::Zero::zero(), |acc_coeff, (coeff, _)| acc_coeff + coeff),
-            //         grade.clone(),
-            //     )
-            // })
-            // .filter(|(coeff, _)| !num::Zero::is_zero(coeff)),
         )
     }
 }

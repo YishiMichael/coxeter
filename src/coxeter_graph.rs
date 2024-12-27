@@ -1,5 +1,6 @@
 use itertools::Itertools;
 
+use super::alg;
 use super::cyclotomic::Cyclotomic;
 use super::square_matrix::SquareMatrix;
 
@@ -16,12 +17,12 @@ pub enum CoxeterGraphEdgeType {
     Label4,
     Label5,
     Label6,
-    FiniteLabel(u64),
+    FiniteLabel(usize),
     InfiniteLabel,
 }
 
 impl CoxeterGraphEdgeType {
-    fn coxeter_matrix_entry(&self) -> Cyclotomic<i64> {
+    fn coxeter_matrix_entry(&self) -> Cyclotomic {
         match self {
             &Self::SelfLoop => Some(1),
             &Self::Unconnected => Some(2),
@@ -33,10 +34,17 @@ impl CoxeterGraphEdgeType {
             &Self::InfiniteLabel => None,
         }
         .map(|label| {
-            -(Cyclotomic::<i64>::root_of_unity(2 * label, 1)
-                + Cyclotomic::<i64>::root_of_unity(2 * label, 2 * label - 1))
+            alg::AdditiveInverse::neg(alg::AdditiveMagma::add(
+                Cyclotomic::root_of_unity(2 * label, 1),
+                Cyclotomic::root_of_unity(2 * label, 2 * label - 1),
+            ))
         })
-        .unwrap_or(num::Zero::zero())
+        .unwrap_or_else(|| {
+            alg::AdditiveInverse::neg(alg::AdditiveMagma::add(
+                alg::MultiplicativeIdentity::one(),
+                alg::MultiplicativeIdentity::one(),
+            ))
+        })
     }
 }
 
@@ -67,7 +75,7 @@ impl CoxeterGraph {
         self.0.node_count()
     }
 
-    pub fn coxeter_matrix(&self) -> SquareMatrix<Cyclotomic<i64>> {
+    pub fn coxeter_matrix(&self) -> SquareMatrix<Cyclotomic> {
         let indexing = |index| petgraph::visit::NodeIndexable::from_index(&self.0, index);
         SquareMatrix::from_fn(self.rank(), |i, j| {
             (if i == j {
@@ -84,40 +92,40 @@ impl CoxeterGraph {
         })
     }
 
-    pub fn coxeter_element_embedding(&self) -> SquareMatrix<Cyclotomic<i64>> {
+    pub fn coxeter_element_embedding(&self) -> SquareMatrix<Cyclotomic> {
         let mut coxeter_matrix = self.coxeter_matrix();
         let dimension = coxeter_matrix.dimension();
         let neg_strict_upper_triangular_matrix = SquareMatrix::from_fn(dimension, |i, j| {
             if i < j {
-                -coxeter_matrix.take(i, j)
+                alg::AdditiveInverse::neg(coxeter_matrix.take(i, j))
             } else {
-                num::Zero::zero()
+                alg::AdditiveIdentity::zero()
             }
         });
         -(SquareMatrix::one(dimension) - neg_strict_upper_triangular_matrix.clone().transpose())
             * neg_strict_upper_triangular_matrix.inverse_one_minus_nilpotent()
     }
 
-    pub fn coxeter_number(&self) -> u64 {
-        self.coxeter_element_embedding().order_unipotent() as u64
+    pub fn coxeter_number(&self) -> usize {
+        self.coxeter_element_embedding().order_unipotent()
     }
 
-    pub fn exponents(&self) -> Vec<u64> {
+    pub fn exponents(&self) -> Vec<usize> {
         let coxeter_element_embedding = self.coxeter_element_embedding();
-        let coxeter_number = coxeter_element_embedding.order_unipotent() as u64;
+        let coxeter_number = coxeter_element_embedding.order_unipotent();
         let characteristic_polynomial = coxeter_element_embedding.characteristic_polynomial();
         (0..coxeter_number)
             .filter(|&exponent| {
-                num::Zero::is_zero(
+                alg::AdditiveIdentity::is_zero(
                     &characteristic_polynomial
                         .clone()
-                        .eval(Cyclotomic::<i64>::root_of_unity(coxeter_number, exponent)),
+                        .eval(Cyclotomic::root_of_unity(coxeter_number, exponent)),
                 )
             })
             .collect()
     }
 
-    pub fn degrees(&self) -> Vec<u64> {
+    pub fn degrees(&self) -> Vec<usize> {
         self.exponents()
             .into_iter()
             .map(|exponent| exponent + 1)
@@ -137,7 +145,7 @@ pub enum CoxeterGroupType {
     G2,
     H3,
     H4,
-    I2(u64),
+    I2(usize),
 }
 
 impl CoxeterGroupType {

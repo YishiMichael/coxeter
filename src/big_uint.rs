@@ -1,6 +1,6 @@
 use super::alg;
 
-#[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct BigUint(num::BigUint);
 
 impl BigUint {
@@ -63,7 +63,7 @@ impl Iterator for PrimeFactors {
                 .find(|p| num::Integer::is_multiple_of(&self.n, p))
                 .unwrap();
             self.n /= self.p.clone();
-            BigUint(self.n.clone())
+            BigUint(self.p.clone())
         })
     }
 }

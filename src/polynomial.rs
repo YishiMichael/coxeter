@@ -2,7 +2,7 @@ use super::alg;
 use super::big_uint::BigUint;
 use super::graded_algebra::GradedAlgebra;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Polynomial<R>(GradedAlgebra<R, BigUint>);
 
 impl<R> Polynomial<R>
