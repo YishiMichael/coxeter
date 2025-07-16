@@ -1,47 +1,85 @@
-use super::alg;
-use super::big_uint::BigUint;
+use super::alg::*;
+// use num::BigUint;
+// use super::big_uint::BigUint;
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct PruferGroup(num::BigRational);
+pub struct PruferGroup<U> {
+    numer: U,
+    denom: U,
+}
 
-impl PruferGroup {
+impl<U> PruferGroup<U>
+where
+    U: num::Integer + num::Unsigned,
+{
+    // #[inline]
+    // fn wrap(value: num::Rational32) -> num::Rational32 {
+    //     value.clone() - value.floor()
+    // }
+
     #[inline]
-    fn wrap(value: num::BigRational) -> num::BigRational {
-        value.clone() - value.floor()
+    pub fn new(numer: U, denom: U) -> Self {
+        assert!(!denom.is_zero());
+        Self { numer, denom }
+    }
+
+    #[inline]
+    pub fn numer(&self) -> &U {
+        &self.numer
+    }
+
+    #[inline]
+    pub fn denom(&self) -> &U {
+        &self.denom
     }
 }
 
-impl From<(BigUint, BigUint)> for PruferGroup {
-    fn from((numer, denom): (BigUint, BigUint)) -> Self {
-        Self(Self::wrap(num::BigRational::new(
-            <BigUint as Into<num::BigUint>>::into(numer).into(),
-            <BigUint as Into<num::BigUint>>::into(denom).into(),
-        )))
-    }
-}
+// impl From<(BigUint, BigUint)> for PruferGroup {
+//     fn from((numer, denom): (BigUint, BigUint)) -> Self {
+//         Self(Self::wrap(num::BigRational::new(
+//             <BigUint as Into<num::BigUint>>::into(numer).into(),
+//             <BigUint as Into<num::BigUint>>::into(denom).into(),
+//         )))
+//     }
+// }
 
-impl alg::AdditiveMagma for PruferGroup {
+impl<U> AdditiveMagma for PruferGroup<U>
+where
+    U: num::Integer + num::Unsigned,
+{
     #[inline]
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        Self(Self::wrap(iter.map(|x| x.0).sum::<num::BigRational>()))
+        iter.fold(Self::zero(), |lhs, rhs| {
+            let denom = lhs.denom.lcm(&rhs.denom);
+            let numer = (lhs.numer * denom.div_floor(&lhs.denom)
+                + rhs.numer * denom.div_floor(&rhs.denom))
+            .mod_floor(&denom);
+            Self { numer, denom }
+        })
     }
 }
 
-impl alg::AdditiveIdentity for PruferGroup {
+impl<U> AdditiveIdentity for PruferGroup<U>
+where
+    U: num::Integer + num::Unsigned,
+{
     #[inline]
     fn zero() -> Self {
-        Self(num::Zero::zero())
+        Self::new(U::zero(), U::one())
     }
 
     #[inline]
     fn is_zero(&self) -> bool {
-        num::Zero::is_zero(&self.0)
+        self.numer.is_zero()
     }
 }
 
-impl alg::AdditiveInverse for PruferGroup {
+impl<U> AdditiveInverse for PruferGroup<U>
+where
+    U: Clone + num::Integer + num::Unsigned,
+{
     #[inline]
     fn neg(self) -> Self {
-        Self(Self::wrap(std::ops::Neg::neg(self.0)))
+        Self::new(self.denom.clone() - self.numer, self.denom)
     }
 }

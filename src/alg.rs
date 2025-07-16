@@ -23,10 +23,10 @@ pub trait AdditiveInverse {
 }
 
 pub trait MultiplicativeMagma: Sized {
-    fn product<I: Iterator<Item = Self>>(iter: I) -> Self;
+    fn prod<I: Iterator<Item = Self>>(iter: I) -> Self;
 
     fn mul(self, rhs: Self) -> Self {
-        Self::product([self, rhs].into_iter())
+        Self::prod([self, rhs].into_iter())
     }
 
     fn div(self, rhs: Self) -> Self
@@ -59,3 +59,63 @@ impl<T> MultiplicativeMonoid for T where T: MultiplicativeMagma + Multiplicative
 impl<T> MultiplicativeGroup for T where T: MultiplicativeMonoid + MultiplicativeInverse {}
 impl<T> Ring for T where T: AdditiveGroup + MultiplicativeMonoid {}
 impl<T> Field for T where T: Ring + MultiplicativeInverse {}
+
+impl<T> AdditiveMagma for T
+where
+    T: num::Num,
+{
+    #[inline]
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Self::zero(), std::ops::Add::add)
+    }
+}
+
+impl<T> AdditiveIdentity for T
+where
+    T: num::Num,
+{
+    #[inline]
+    fn zero() -> Self {
+        num::Zero::zero()
+    }
+
+    #[inline]
+    fn is_zero(&self) -> bool {
+        num::Zero::is_zero(self)
+    }
+}
+
+impl<T> AdditiveInverse for T
+where
+    T: num::Num,
+{
+    #[inline]
+    fn neg(self) -> Self {
+        Self::zero() - self
+    }
+}
+
+impl<T> MultiplicativeMagma for T
+where
+    T: num::Num,
+{
+    #[inline]
+    fn prod<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Self::one(), std::ops::Mul::mul)
+    }
+}
+
+impl<T> MultiplicativeIdentity for T
+where
+    T: num::Num,
+{
+    #[inline]
+    fn one() -> Self {
+        num::One::one()
+    }
+
+    #[inline]
+    fn is_one(&self) -> bool {
+        num::One::is_one(self)
+    }
+}

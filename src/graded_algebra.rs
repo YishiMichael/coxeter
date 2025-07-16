@@ -1,6 +1,6 @@
 use itertools::Itertools;
 
-use super::alg;
+use super::alg::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct GradedAlgebra<R, G>(Vec<(R, G)>);
@@ -23,24 +23,20 @@ impl<R, G> GradedAlgebra<R, G> {
     }
 }
 
-impl<R, G> GradedAlgebra<R, G>
-where
-    R: alg::Ring + Clone,
-    G: alg::AdditiveMonoid + Clone + std::cmp::Ord,
-{
-    pub fn embed(coeff: R, grade: G) -> Self {
-        Self::from_terms(std::iter::once((coeff, grade)))
-    }
+// impl<R, G> GradedAlgebra<R, G>
+// where
+//     R: Ring,
+//     G: AdditiveMonoid + std::cmp::Ord,
+// {
+//     pub fn embed_root_of_unity(order: U, exponent: U) -> Self {
+//         Self::from_terms(std::iter::once((R::one(), grade)))
+//     }
+// }
 
-    pub fn embed_scalar(coeff: R) -> Self {
-        Self::embed(coeff, alg::AdditiveIdentity::zero())
-    }
-}
-
-impl<R, G> alg::AdditiveMagma for GradedAlgebra<R, G>
+impl<R, G> AdditiveMagma for GradedAlgebra<R, G>
 where
-    R: alg::Ring + Clone,
-    G: alg::AdditiveMonoid + Clone + std::cmp::Ord,
+    R: Ring + Clone,
+    G: AdditiveMonoid + Clone + std::cmp::Ord,
 {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         Self::from_terms(
@@ -48,21 +44,16 @@ where
                 .kmerge_by(|(_, grade_0), (_, grade_1)| grade_0 < grade_1)
                 .chunk_by(|(_, grade)| grade.clone())
                 .into_iter()
-                .map(|(grade, chunk)| {
-                    (
-                        alg::AdditiveMagma::sum(chunk.map(|(coeff, _)| coeff)),
-                        grade.clone(),
-                    )
-                })
+                .map(|(grade, chunk)| (R::sum(chunk.map(|(coeff, _)| coeff)), grade.clone()))
                 .filter(|(coeff, _)| !coeff.is_zero()),
         )
     }
 }
 
-impl<R, G> alg::AdditiveIdentity for GradedAlgebra<R, G>
+impl<R, G> AdditiveIdentity for GradedAlgebra<R, G>
 where
-    R: alg::Ring + Clone,
-    G: alg::AdditiveMonoid + Clone + std::cmp::Ord,
+    R: Ring + Clone,
+    G: AdditiveMonoid + Clone + std::cmp::Ord,
 {
     fn zero() -> Self {
         Self::from_terms(std::iter::empty())
@@ -73,57 +64,46 @@ where
     }
 }
 
-impl<R, G> alg::AdditiveInverse for GradedAlgebra<R, G>
+impl<R, G> AdditiveInverse for GradedAlgebra<R, G>
 where
-    R: alg::Ring + Clone,
-    G: alg::AdditiveMonoid + Clone + std::cmp::Ord,
+    R: Ring + Clone,
+    G: AdditiveMonoid + Clone + std::cmp::Ord,
 {
     fn neg(self) -> Self {
         Self::from_terms(self.take_terms().map(|(coeff, grade)| (coeff.neg(), grade)))
     }
 }
 
-impl<R, G> alg::MultiplicativeMagma for GradedAlgebra<R, G>
+impl<R, G> MultiplicativeMagma for GradedAlgebra<R, G>
 where
-    R: alg::Ring + Clone,
-    G: alg::AdditiveMonoid + Clone + std::cmp::Ord,
+    R: Ring + Clone,
+    G: AdditiveMonoid + Clone + std::cmp::Ord,
 {
-    fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
+    fn prod<I: Iterator<Item = Self>>(iter: I) -> Self {
         Self::from_terms(
             iter.map(Self::take_terms)
                 .map(|terms| terms.collect::<Vec<_>>())
                 .multi_cartesian_product()
                 .map(|terms| {
                     let (coeffs, grades) = terms.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
-                    (
-                        alg::MultiplicativeMagma::product(coeffs.into_iter()),
-                        alg::AdditiveMagma::sum(grades.into_iter()),
-                    )
+                    (R::prod(coeffs.into_iter()), G::sum(grades.into_iter()))
                 })
                 .sorted_by_key(|(_, grade)| grade.clone())
                 .chunk_by(|(_, grade)| grade.clone())
                 .into_iter()
-                .map(|(grade, chunk)| {
-                    (
-                        alg::AdditiveMagma::sum(chunk.map(|(coeff, _)| coeff)),
-                        grade.clone(),
-                    )
-                })
+                .map(|(grade, chunk)| (R::sum(chunk.map(|(coeff, _)| coeff)), grade.clone()))
                 .filter(|(coeff, _)| !coeff.is_zero()),
         )
     }
 }
 
-impl<R, G> alg::MultiplicativeIdentity for GradedAlgebra<R, G>
+impl<R, G> MultiplicativeIdentity for GradedAlgebra<R, G>
 where
-    R: alg::Ring + Clone,
-    G: alg::AdditiveMonoid + Clone + std::cmp::Ord,
+    R: Ring + Clone,
+    G: AdditiveMonoid + Clone + std::cmp::Ord,
 {
     fn one() -> Self {
-        Self::from_terms(std::iter::once((
-            alg::MultiplicativeIdentity::one(),
-            alg::AdditiveIdentity::zero(),
-        )))
+        Self::from_terms(std::iter::once((R::one(), G::zero())))
     }
 
     fn is_one(&self) -> bool {

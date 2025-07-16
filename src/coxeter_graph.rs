@@ -1,6 +1,6 @@
 use itertools::Itertools;
 
-use super::alg;
+use super::alg::*;
 use super::cyclotomic::Cyclotomic;
 use super::square_matrix::SquareMatrix;
 
@@ -13,47 +13,44 @@ pub enum CoxeterDiagramNodeType {
 pub enum CoxeterGraphEdgeType {
     SelfLoop,
     Unconnected,
-    Unlabelled,
-    Label4,
-    Label5,
-    Label6,
-    FiniteLabel(usize),
-    InfiniteLabel,
+    Label(LabelType),
+}
+
+#[derive(Clone)]
+pub enum LabelType {
+    Implicit,
+    Explicit(u32),
+    ExplicitInfinite,
 }
 
 impl CoxeterGraphEdgeType {
-    fn coxeter_matrix_entry(&self) -> Cyclotomic {
+    fn coxeter_matrix_entry(&self) -> Cyclotomic<i32, u32> {
         match self {
-            &Self::SelfLoop => Some(1),
-            &Self::Unconnected => Some(2),
-            &Self::Unlabelled => Some(3),
-            &Self::Label4 => Some(4),
-            &Self::Label5 => Some(5),
-            &Self::Label6 => Some(6),
-            &Self::FiniteLabel(label) => Some(label),
-            &Self::InfiniteLabel => None,
+            &Self::SelfLoop => Cyclotomic::one().add(Cyclotomic::one()),
+            &Self::Unconnected => Cyclotomic::zero(),
+            &Self::Label(LabelType::Implicit) => Cyclotomic::one().neg(),
+            &Self::Label(LabelType::Explicit(label)) => Cyclotomic::root_of_unity(2 * label, 1)
+                .add(Cyclotomic::root_of_unity(2 * label, 2 * label - 1))
+                .neg(),
+            &Self::Label(LabelType::ExplicitInfinite) => {
+                Cyclotomic::one().add(Cyclotomic::one()).neg()
+            }
         }
-        .map(|label| {
-            alg::AdditiveInverse::neg(alg::AdditiveMagma::add(
-                Cyclotomic::root_of_unity(2 * label, 1),
-                Cyclotomic::root_of_unity(2 * label, 2 * label - 1),
-            ))
-        })
-        .unwrap_or_else(|| {
-            alg::AdditiveInverse::neg(alg::AdditiveMagma::add(
-                alg::MultiplicativeIdentity::one(),
-                alg::MultiplicativeIdentity::one(),
-            ))
-        })
+        // .map(|label| {
+        //     Cyclotomic::root_of_unity(2 * label, 1)
+        //         .add(Cyclotomic::root_of_unity(2 * label, 2 * label - 1))
+        //         .neg()
+        // })
+        // .unwrap_or_else(|| Cyclotomic::one().add(Cyclotomic::one()).neg())
     }
 }
 
-pub struct CoxeterGraph(petgraph::graph::UnGraph<(), CoxeterGraphEdgeType>);
+pub struct CoxeterGraph(petgraph::graph::UnGraph<(), LabelType>);
 
 impl CoxeterGraph {
     pub fn from_edges<I>(rank: usize, edges: I) -> Self
     where
-        I: IntoIterator<Item = ((usize, usize), CoxeterGraphEdgeType)>,
+        I: IntoIterator<Item = ((usize, usize), LabelType)>,
     {
         let mut graph = petgraph::graph::UnGraph::new_undirected();
         let nodes = (0..rank).map(|_| graph.add_node(())).collect::<Vec<_>>();
@@ -63,19 +60,11 @@ impl CoxeterGraph {
         Self(graph)
     }
 
-    pub fn from_type(group_type: CoxeterGroupType) -> Self {
-        coxeter_graph_from_type_extended(group_type, 0)
-    }
-
-    pub fn from_type_extended(group_type: CoxeterGroupType, extension: usize) -> Self {
-        coxeter_graph_from_type_extended(group_type, extension)
-    }
-
     pub fn rank(&self) -> usize {
         self.0.node_count()
     }
 
-    pub fn coxeter_matrix(&self) -> SquareMatrix<Cyclotomic> {
+    pub fn coxeter_matrix(&self) -> SquareMatrix<Cyclotomic<i32, u32>> {
         let indexing = |index| petgraph::visit::NodeIndexable::from_index(&self.0, index);
         SquareMatrix::from_fn(self.rank(), |i, j| {
             (if i == j {
@@ -86,46 +75,65 @@ impl CoxeterGraph {
                     .map(|edge_index| self.0.edge_weight(edge_index))
                     .flatten()
                     .cloned()
+                    .map(CoxeterGraphEdgeType::Label)
                     .unwrap_or(CoxeterGraphEdgeType::Unconnected)
             })
             .coxeter_matrix_entry()
         })
     }
 
-    pub fn coxeter_element_embedding(&self) -> SquareMatrix<Cyclotomic> {
-        let mut coxeter_matrix = self.coxeter_matrix();
+    pub fn coxeter_element_embedding(&self) -> SquareMatrix<Cyclotomic<i32, u32>> {
+        let coxeter_matrix = self.coxeter_matrix();
+        println!("coxeter_matrix {:#?}", coxeter_matrix);
         let dimension = coxeter_matrix.dimension();
         let neg_strict_upper_triangular_matrix = SquareMatrix::from_fn(dimension, |i, j| {
             if i < j {
-                alg::AdditiveInverse::neg(coxeter_matrix.take(i, j))
+                coxeter_matrix.get(i, j).clone().neg()
             } else {
-                alg::AdditiveIdentity::zero()
+                Cyclotomic::zero()
             }
         });
+        println!(
+            "neg_strict_upper_triangular_matrix {:#?}",
+            neg_strict_upper_triangular_matrix
+        );
+        println!(
+            "neg_strict_upper_triangular_matrix^2 {:#?}",
+            neg_strict_upper_triangular_matrix.clone() * neg_strict_upper_triangular_matrix.clone()
+        );
         -(SquareMatrix::one(dimension) - neg_strict_upper_triangular_matrix.clone().transpose())
-            * neg_strict_upper_triangular_matrix.inverse_one_minus_nilpotent()
+            * std::iter::successors(Some(SquareMatrix::one(dimension)), |matrix| {
+                Some(neg_strict_upper_triangular_matrix.clone() * matrix.clone())
+            })
+            .take(dimension)
+            .fold(SquareMatrix::zero(dimension), std::ops::Add::add)
     }
 
-    pub fn coxeter_number(&self) -> usize {
-        self.coxeter_element_embedding().order_unipotent()
+    pub fn coxeter_number(&self) -> u32 {
+        println!(">>> {:#?}", self.coxeter_element_embedding());
+        self.coxeter_element_embedding().order() as u32
     }
 
-    pub fn exponents(&self) -> Vec<usize> {
+    pub fn exponents(&self) -> Vec<u32> {
         let coxeter_element_embedding = self.coxeter_element_embedding();
-        let coxeter_number = coxeter_element_embedding.order_unipotent();
-        let characteristic_polynomial = coxeter_element_embedding.characteristic_polynomial();
+        let dimension = coxeter_element_embedding.dimension();
+        let coxeter_number = coxeter_element_embedding.order() as u32;
+        // let characteristic_polynomial = coxeter_element_embedding.characteristic_polynomial();
         (0..coxeter_number)
             .filter(|&exponent| {
-                alg::AdditiveIdentity::is_zero(
-                    &characteristic_polynomial
-                        .clone()
-                        .eval(Cyclotomic::root_of_unity(coxeter_number, exponent)),
+                println!("{exponent}");
+                Cyclotomic::is_zero(
+                    &(SquareMatrix::embed(
+                        dimension,
+                        Cyclotomic::root_of_unity(coxeter_number, exponent),
+                    ) - coxeter_element_embedding.clone())
+                    .determinant(),
                 )
             })
             .collect()
     }
 
-    pub fn degrees(&self) -> Vec<usize> {
+    pub fn degrees(&self) -> Vec<u32> {
         self.exponents()
             .into_iter()
             .map(|exponent| exponent + 1)
@@ -138,169 +146,79 @@ pub enum CoxeterGroupType {
     B(usize),
     C(usize),
     D(usize),
-    E6,
-    E7,
-    E8,
-    F4,
-    G2,
-    H3,
-    H4,
-    I2(usize),
+    E(usize),
+    F(usize),
+    G(usize),
+    H(usize),
+    I2(LabelType),
 }
 
-impl CoxeterGroupType {
-    pub fn rank(&self) -> usize {
-        match *self {
-            Self::A(rank) => rank,
-            Self::B(rank) => rank,
-            Self::C(rank) => rank,
-            Self::D(rank) => rank,
-            Self::E6 => 6,
-            Self::E7 => 7,
-            Self::E8 => 8,
-            Self::F4 => 4,
-            Self::G2 => 2,
-            Self::H3 => 3,
-            Self::H4 => 4,
-            Self::I2(_) => 2,
-        }
-    }
-}
-
-// https://en.wikipedia.org/wiki/Coxeter%E2%80%93Dynkin_diagram
-fn coxeter_graph_from_type_extended(
-    group_type: CoxeterGroupType,
-    extension: usize,
-) -> CoxeterGraph {
-    let rank = group_type.rank();
-    let (edges, joints) = match group_type {
-        CoxeterGroupType::A(1) => (
-            [].to_vec(),
-            [((0, rank), CoxeterGraphEdgeType::InfiniteLabel)].to_vec(),
-        ),
-        CoxeterGroupType::A(rank) => (
-            (0..rank)
-                .tuple_windows()
-                .map(|(i, j)| ((i, j), CoxeterGraphEdgeType::Unlabelled))
-                .collect(),
-            [
-                ((0, rank), CoxeterGraphEdgeType::Unlabelled),
-                ((rank - 1, rank), CoxeterGraphEdgeType::Unlabelled),
-            ]
-            .to_vec(),
-        ),
-        CoxeterGroupType::B(rank) if rank >= 3 => (
-            (0..rank - 2)
-                .tuple_windows()
-                .map(|(i, j)| ((i, j), CoxeterGraphEdgeType::Unlabelled))
-                .chain([
-                    ((rank - 3, rank - 2), CoxeterGraphEdgeType::Label4),
-                    ((0, rank - 1), CoxeterGraphEdgeType::Unlabelled),
-                ])
-                .collect(),
-            [((0, rank), CoxeterGraphEdgeType::Unlabelled)].to_vec(),
-        ),
-        CoxeterGroupType::C(rank) if rank >= 2 => (
-            (0..rank - 1)
-                .tuple_windows()
-                .map(|(i, j)| ((i, j), CoxeterGraphEdgeType::Unlabelled))
-                .chain([((rank - 2, rank - 1), CoxeterGraphEdgeType::Label4)])
-                .collect(),
-            [((0, rank), CoxeterGraphEdgeType::Label4)].to_vec(),
-        ),
-        CoxeterGroupType::D(rank) if rank >= 4 => (
-            (0..rank - 2)
-                .tuple_windows()
-                .map(|(i, j)| ((i, j), CoxeterGraphEdgeType::Unlabelled))
-                .chain([
-                    ((rank - 4, rank - 2), CoxeterGraphEdgeType::Unlabelled),
-                    ((0, rank - 1), CoxeterGraphEdgeType::Unlabelled),
-                ])
-                .collect(),
-            [((0, rank), CoxeterGraphEdgeType::Unlabelled)].to_vec(),
-        ),
-        CoxeterGroupType::E6 => (
-            [
-                ((0, 1), CoxeterGraphEdgeType::Unlabelled),
-                ((1, 2), CoxeterGraphEdgeType::Unlabelled),
-                ((2, 3), CoxeterGraphEdgeType::Unlabelled),
-                ((1, 4), CoxeterGraphEdgeType::Unlabelled),
-                ((4, 5), CoxeterGraphEdgeType::Unlabelled),
-            ]
-            .to_vec(),
-            [((0, rank), CoxeterGraphEdgeType::Unlabelled)].to_vec(),
-        ),
-        CoxeterGroupType::E7 => (
-            [
-                ((0, 1), CoxeterGraphEdgeType::Unlabelled),
-                ((1, 2), CoxeterGraphEdgeType::Unlabelled),
-                ((2, 3), CoxeterGraphEdgeType::Unlabelled),
-                ((3, 4), CoxeterGraphEdgeType::Unlabelled),
-                ((4, 5), CoxeterGraphEdgeType::Unlabelled),
-                ((2, 6), CoxeterGraphEdgeType::Unlabelled),
-            ]
-            .to_vec(),
-            [((0, rank), CoxeterGraphEdgeType::Unlabelled)].to_vec(),
-        ),
-        CoxeterGroupType::E8 => (
-            [
-                ((0, 1), CoxeterGraphEdgeType::Unlabelled),
-                ((1, 2), CoxeterGraphEdgeType::Unlabelled),
-                ((2, 3), CoxeterGraphEdgeType::Unlabelled),
-                ((3, 4), CoxeterGraphEdgeType::Unlabelled),
-                ((4, 5), CoxeterGraphEdgeType::Unlabelled),
-                ((5, 6), CoxeterGraphEdgeType::Unlabelled),
-                ((4, 7), CoxeterGraphEdgeType::Unlabelled),
-            ]
-            .to_vec(),
-            [((0, rank), CoxeterGraphEdgeType::Unlabelled)].to_vec(),
-        ),
-        CoxeterGroupType::F4 => (
-            [
-                ((0, 1), CoxeterGraphEdgeType::Unlabelled),
-                ((1, 2), CoxeterGraphEdgeType::Label4),
-                ((2, 3), CoxeterGraphEdgeType::Unlabelled),
-            ]
-            .to_vec(),
-            [((0, rank), CoxeterGraphEdgeType::Unlabelled)].to_vec(),
-        ),
-        CoxeterGroupType::G2 => (
-            [((0, 1), CoxeterGraphEdgeType::Label6)].to_vec(),
-            [((0, rank), CoxeterGraphEdgeType::Unlabelled)].to_vec(),
-        ),
-        CoxeterGroupType::H3 => (
-            [
-                ((0, 1), CoxeterGraphEdgeType::Unlabelled),
-                ((1, 2), CoxeterGraphEdgeType::Label5),
-            ]
-            .to_vec(),
-            [((0, rank), CoxeterGraphEdgeType::Unlabelled)].to_vec(),
-        ),
-        CoxeterGroupType::H4 => (
-            [
-                ((0, 1), CoxeterGraphEdgeType::Unlabelled),
-                ((1, 2), CoxeterGraphEdgeType::Unlabelled),
-                ((2, 3), CoxeterGraphEdgeType::Label5),
-            ]
-            .to_vec(),
-            [((0, rank), CoxeterGraphEdgeType::Unlabelled)].to_vec(),
-        ),
-        CoxeterGroupType::I2(label) if label >= 3 => (
-            [((0, 1), CoxeterGraphEdgeType::FiniteLabel(label))].to_vec(),
-            [((0, rank), CoxeterGraphEdgeType::Unlabelled)].to_vec(), // check
-        ),
-        _ => panic!(),
-    };
-    if extension == 0 {
-        CoxeterGraph::from_edges(rank, edges.into_iter())
-    } else {
-        CoxeterGraph::from_edges(
-            rank + extension,
-            edges.into_iter().chain(joints.into_iter()).chain(
-                (rank + 1..extension)
+impl From<CoxeterGroupType> for CoxeterGraph {
+    fn from(value: CoxeterGroupType) -> Self {
+        match value {
+            CoxeterGroupType::A(rank @ 1..) => CoxeterGraph::from_edges(
+                rank,
+                (0..rank)
                     .tuple_windows()
-                    .map(|(i, j)| ((i, j), CoxeterGraphEdgeType::Unlabelled)),
+                    .map(|(i, j)| ((i, j), LabelType::Implicit)),
             ),
-        )
+            CoxeterGroupType::B(rank @ 2..) => CoxeterGraph::from_edges(
+                rank,
+                (0..rank - 1)
+                    .tuple_windows()
+                    .map(|(i, j)| ((i, j), LabelType::Implicit))
+                    .chain([((rank - 2, rank - 1), LabelType::Explicit(4))]),
+            ),
+            CoxeterGroupType::C(rank @ 2..) => CoxeterGraph::from_edges(
+                rank,
+                (0..rank - 1)
+                    .tuple_windows()
+                    .map(|(i, j)| ((i, j), LabelType::Implicit))
+                    .chain([((rank - 2, rank - 1), LabelType::Explicit(4))]),
+            ),
+            CoxeterGroupType::D(rank @ 3..) => CoxeterGraph::from_edges(
+                rank,
+                (0..rank - 2)
+                    .tuple_windows()
+                    .map(|(i, j)| ((i, j), LabelType::Implicit))
+                    .chain([
+                        ((rank - 3, rank - 2), LabelType::Implicit),
+                        ((rank - 3, rank - 1), LabelType::Implicit),
+                    ]),
+            ),
+            CoxeterGroupType::E(rank @ 4..=8) => CoxeterGraph::from_edges(
+                rank,
+                (2..rank)
+                    .tuple_windows()
+                    .map(|(i, j)| ((i, j), LabelType::Implicit))
+                    .chain([((0, 2), LabelType::Implicit), ((1, 3), LabelType::Implicit)]),
+            ),
+            CoxeterGroupType::F(rank @ 3..=4) => CoxeterGraph::from_edges(
+                rank,
+                (0..rank - 2)
+                    .tuple_windows()
+                    .map(|(i, j)| ((i, j), LabelType::Implicit))
+                    .chain([
+                        ((rank - 3, rank - 2), LabelType::Explicit(4)),
+                        ((rank - 2, rank - 1), LabelType::Implicit),
+                    ]),
+            ),
+            CoxeterGroupType::G(rank @ 2..=2) => CoxeterGraph::from_edges(
+                rank,
+                (0..rank - 1)
+                    .tuple_windows()
+                    .map(|(i, j)| ((i, j), LabelType::Implicit))
+                    .chain([((rank - 2, rank - 1), LabelType::Explicit(6))]),
+            ),
+            CoxeterGroupType::H(rank @ 2..=4) => CoxeterGraph::from_edges(
+                rank,
+                (0..rank - 1)
+                    .tuple_windows()
+                    .map(|(i, j)| ((i, j), LabelType::Implicit))
+                    .chain([((rank - 2, rank - 1), LabelType::Explicit(5))]),
+            ),
+            CoxeterGroupType::I2(label) => CoxeterGraph::from_edges(2, [((0, 1), label)]),
+            _ => panic!(),
+        }
     }
 }
