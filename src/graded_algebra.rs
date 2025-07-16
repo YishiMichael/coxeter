@@ -2,7 +2,7 @@ use itertools::Itertools;
 
 use super::alg::*;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct GradedAlgebra<R, G>(Vec<(R, G)>);
 
 impl<R, G> GradedAlgebra<R, G> {
@@ -22,16 +22,6 @@ impl<R, G> GradedAlgebra<R, G> {
         self.0.into_iter()
     }
 }
-
-// impl<R, G> GradedAlgebra<R, G>
-// where
-//     R: Ring,
-//     G: AdditiveMonoid + std::cmp::Ord,
-// {
-//     pub fn embed_root_of_unity(order: U, exponent: U) -> Self {
-//         Self::from_terms(std::iter::once((R::one(), grade)))
-//     }
-// }
 
 impl<R, G> AdditiveMagma for GradedAlgebra<R, G>
 where

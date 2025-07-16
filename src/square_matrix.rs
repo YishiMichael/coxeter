@@ -1,11 +1,8 @@
-use std::fmt::Debug;
-
 use itertools::Itertools;
 
 use super::alg::*;
-// use super::polynomial::Polynomial;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct SquareMatrix<T> {
     dimension: usize,
     elements: Vec<Vec<T>>,
@@ -96,19 +93,14 @@ where
             .unwrap()
     }
 
-    pub fn determinant(&self) -> T
-    where
-        T: Debug,
-    {
-        println!("Before permutation");
-        let a = T::sum(
+    pub fn determinant(&self) -> T {
+        T::sum(
             (0..self.dimension())
                 .permutations(self.dimension())
                 .filter(|permutation| {
                     (0..self.dimension()).all(|i| !self.get(i, permutation[i]).is_zero())
                 })
                 .map(|permutation| {
-                    println!("In permutation: {permutation:?}");
                     let neg_sign = permutation
                         .iter()
                         .combinations(2)
@@ -131,27 +123,8 @@ where
                         product
                     }
                 }),
-        );
-        println!("After permutation");
-        a
+        )
     }
-
-    // pub fn characteristic_polynomial(&self) -> Polynomial<T> {
-    //     SquareMatrix::from_fn(self.dimension(), |i, j| {
-    //         alg::AdditiveMagma::sub(
-    //             Polynomial::monomial(self.get(i, j).clone(), alg::AdditiveIdentity::zero()),
-    //             if i == j {
-    //                 Polynomial::monomial(
-    //                     alg::MultiplicativeIdentity::one(),
-    //                     alg::MultiplicativeIdentity::one(),
-    //                 )
-    //             } else {
-    //                 alg::AdditiveIdentity::zero()
-    //             },
-    //         )
-    //     })
-    //     .determinant()
-    // }
 }
 
 impl<T> std::ops::Neg for SquareMatrix<T>

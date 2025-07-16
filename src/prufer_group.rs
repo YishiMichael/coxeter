@@ -1,8 +1,6 @@
 use super::alg::*;
-// use num::BigUint;
-// use super::big_uint::BigUint;
 
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub struct PruferGroup<U> {
     numer: U,
     denom: U,
@@ -12,11 +10,6 @@ impl<U> PruferGroup<U>
 where
     U: num::Integer + num::Unsigned,
 {
-    // #[inline]
-    // fn wrap(value: num::Rational32) -> num::Rational32 {
-    //     value.clone() - value.floor()
-    // }
-
     #[inline]
     pub fn new(numer: U, denom: U) -> Self {
         assert!(!denom.is_zero());
@@ -33,15 +26,6 @@ where
         &self.denom
     }
 }
-
-// impl From<(BigUint, BigUint)> for PruferGroup {
-//     fn from((numer, denom): (BigUint, BigUint)) -> Self {
-//         Self(Self::wrap(num::BigRational::new(
-//             <BigUint as Into<num::BigUint>>::into(numer).into(),
-//             <BigUint as Into<num::BigUint>>::into(denom).into(),
-//         )))
-//     }
-// }
 
 impl<U> AdditiveMagma for PruferGroup<U>
 where

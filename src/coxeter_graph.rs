@@ -36,12 +36,6 @@ impl CoxeterGraphEdgeType {
                 Cyclotomic::one().add(Cyclotomic::one()).neg()
             }
         }
-        // .map(|label| {
-        //     Cyclotomic::root_of_unity(2 * label, 1)
-        //         .add(Cyclotomic::root_of_unity(2 * label, 2 * label - 1))
-        //         .neg()
-        // })
-        // .unwrap_or_else(|| Cyclotomic::one().add(Cyclotomic::one()).neg())
     }
 }
 
@@ -84,7 +78,6 @@ impl CoxeterGraph {
 
     pub fn coxeter_element_embedding(&self) -> SquareMatrix<Cyclotomic<i32, u32>> {
         let coxeter_matrix = self.coxeter_matrix();
-        println!("coxeter_matrix {:#?}", coxeter_matrix);
         let dimension = coxeter_matrix.dimension();
         let neg_strict_upper_triangular_matrix = SquareMatrix::from_fn(dimension, |i, j| {
             if i < j {
@@ -93,14 +86,6 @@ impl CoxeterGraph {
                 Cyclotomic::zero()
             }
         });
-        println!(
-            "neg_strict_upper_triangular_matrix {:#?}",
-            neg_strict_upper_triangular_matrix
-        );
-        println!(
-            "neg_strict_upper_triangular_matrix^2 {:#?}",
-            neg_strict_upper_triangular_matrix.clone() * neg_strict_upper_triangular_matrix.clone()
-        );
         -(SquareMatrix::one(dimension) - neg_strict_upper_triangular_matrix.clone().transpose())
             * std::iter::successors(Some(SquareMatrix::one(dimension)), |matrix| {
                 Some(neg_strict_upper_triangular_matrix.clone() * matrix.clone())
@@ -118,7 +103,6 @@ impl CoxeterGraph {
         let coxeter_element_embedding = self.coxeter_element_embedding();
         let dimension = coxeter_element_embedding.dimension();
         let coxeter_number = coxeter_element_embedding.order() as u32;
-        // let characteristic_polynomial = coxeter_element_embedding.characteristic_polynomial();
         (0..coxeter_number)
             .filter(|&exponent| {
                 println!("{exponent}");

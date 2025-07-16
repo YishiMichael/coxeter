@@ -1,11 +1,8 @@
 pub mod alg;
-// pub mod big_uint;
 pub mod coxeter_graph;
 pub mod cyclotomic;
 pub mod graded_algebra;
-// pub mod polynomial;
 pub mod prufer_group;
-// pub mod rational;
 pub mod square_matrix;
 
 #[cfg(test)]
