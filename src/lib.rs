@@ -1,6 +1,7 @@
 pub mod alg;
-pub mod coxeter_graph;
+pub mod coxeter_diagram;
 pub mod cyclotomic;
+pub mod dynkin_diagram;
 pub mod graded_algebra;
 pub mod prufer_group;
 pub mod square_matrix;
@@ -17,6 +18,15 @@ mod tests {
             [
                 Cyclotomic::<i32, u32>::root_of_unity(3, 1),
                 Cyclotomic::<i32, u32>::root_of_unity(3, 2),
+                Cyclotomic::<i32, u32>::root_of_unity(3, 0),
+            ]
+            .into_iter()
+        )
+        .is_zero());
+        assert!(Cyclotomic::sum(
+            [
+                Cyclotomic::<i32, u32>::root_of_unity(3, 1),
+                Cyclotomic::<i32, u32>::root_of_unity(9, 6),
                 Cyclotomic::<i32, u32>::root_of_unity(3, 0),
             ]
             .into_iter()
@@ -46,37 +56,85 @@ mod tests {
     }
 
     #[test]
-    fn test_coxeter_graph() {
-        use super::coxeter_graph::CoxeterGraph;
-        use super::coxeter_graph::CoxeterGroupType;
+    fn test_coxeter_numbers() {
+        use super::coxeter_diagram::CoxeterDiagram;
+        use super::coxeter_diagram::CoxeterDiagramType;
         assert_eq!(
-            CoxeterGraph::from(CoxeterGroupType::B(3)).coxeter_number(),
+            CoxeterDiagram::from(CoxeterDiagramType::B(3)).coxeter_number(),
             6
         );
         assert_eq!(
-            CoxeterGraph::from(CoxeterGroupType::H(3)).coxeter_number(),
+            CoxeterDiagram::from(CoxeterDiagramType::H(3)).coxeter_number(),
             10
         );
         assert_eq!(
-            CoxeterGraph::from(CoxeterGroupType::E(6)).coxeter_number(),
+            CoxeterDiagram::from(CoxeterDiagramType::G(2)).coxeter_number(),
+            6
+        );
+        assert_eq!(
+            CoxeterDiagram::from(CoxeterDiagramType::F(4)).coxeter_number(),
             12
         );
         assert_eq!(
-            CoxeterGraph::from(CoxeterGroupType::E(7)).coxeter_number(),
+            CoxeterDiagram::from(CoxeterDiagramType::E(6)).coxeter_number(),
+            12
+        );
+        assert_eq!(
+            CoxeterDiagram::from(CoxeterDiagramType::E(7)).coxeter_number(),
             18
         );
         assert_eq!(
-            CoxeterGraph::from(CoxeterGroupType::E(8)).coxeter_number(),
+            CoxeterDiagram::from(CoxeterDiagramType::E(8)).coxeter_number(),
             30
         );
     }
 
     #[test]
-    fn test_coxeter_graph_degrees() {
-        use super::coxeter_graph::CoxeterGraph;
-        use super::coxeter_graph::CoxeterGroupType;
+    fn test_g2_degrees() {
+        use super::coxeter_diagram::CoxeterDiagram;
+        use super::coxeter_diagram::CoxeterDiagramType;
         assert_eq!(
-            CoxeterGraph::from(CoxeterGroupType::E(8)).degrees(),
+            CoxeterDiagram::from(CoxeterDiagramType::G(2)).degrees(),
+            &[2, 6]
+        );
+    }
+
+    #[test]
+    fn test_f4_degrees() {
+        use super::coxeter_diagram::CoxeterDiagram;
+        use super::coxeter_diagram::CoxeterDiagramType;
+        assert_eq!(
+            CoxeterDiagram::from(CoxeterDiagramType::F(4)).degrees(),
+            &[2, 6, 8, 12]
+        );
+    }
+
+    #[test]
+    fn test_e6_degrees() {
+        use super::coxeter_diagram::CoxeterDiagram;
+        use super::coxeter_diagram::CoxeterDiagramType;
+        assert_eq!(
+            CoxeterDiagram::from(CoxeterDiagramType::E(6)).degrees(),
+            &[2, 5, 6, 8, 9, 12]
+        );
+    }
+
+    #[test]
+    fn test_e7_degrees() {
+        use super::coxeter_diagram::CoxeterDiagram;
+        use super::coxeter_diagram::CoxeterDiagramType;
+        assert_eq!(
+            CoxeterDiagram::from(CoxeterDiagramType::E(7)).degrees(),
+            &[2, 6, 8, 10, 12, 14, 18]
+        );
+    }
+
+    #[test]
+    fn test_e8_degrees() {
+        use super::coxeter_diagram::CoxeterDiagram;
+        use super::coxeter_diagram::CoxeterDiagramType;
+        assert_eq!(
+            CoxeterDiagram::from(CoxeterDiagramType::E(8)).degrees(),
             &[2, 8, 12, 14, 18, 20, 24, 30]
         );
     }

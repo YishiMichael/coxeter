@@ -1,5 +1,3 @@
-use itertools::Itertools;
-
 use super::alg::*;
 use super::graded_algebra::GradedAlgebra;
 use super::prufer_group::PruferGroup;
@@ -60,24 +58,26 @@ where
             .fold(U::one(), |denom_0, denom_1| denom_0.lcm(denom_1));
         let balancer = GradedAlgebra::prod(
             std::iter::successors(Some(U::one() + U::one()), |p| Some(p.clone().add(U::one())))
-                .scan(order, |n, mut p| {
+                .scan(order.clone(), |n, mut p| {
                     (!n.is_one()).then(|| {
                         while !n.is_multiple_of(&p) {
                             p.inc();
                         }
-                        *n = n.div_floor(&p);
+                        while n.is_multiple_of(&p) {
+                            *n = n.div_floor(&p);
+                        }
                         p
                     })
                 })
-                .dedup()
                 .map(|p| {
+                    let step = order.div_floor(&p);
                     GradedAlgebra::sum(
-                        std::iter::successors(Some(U::zero()), |i| Some(i.clone().add(U::one())))
-                            .take_while(|i| *i < p)
+                        std::iter::successors(Some(U::zero()), |i| Some(i.clone() + step.clone()))
+                            .take_while(|i| i < &order)
                             .map(|i| {
-                                Self::root_of_unity(p.clone(), U::zero())
+                                Self::root_of_unity(order.clone(), U::zero())
                                     .0
-                                    .sub(Self::root_of_unity(p.clone(), i).0)
+                                    .sub(Self::root_of_unity(order.clone(), i).0)
                             }),
                     )
                 }),

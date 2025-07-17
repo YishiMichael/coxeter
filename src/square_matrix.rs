@@ -1,33 +1,54 @@
 use itertools::Itertools;
+use num::Integer;
 
 use super::alg::*;
 
 #[derive(Clone)]
 pub struct SquareMatrix<T> {
     dimension: usize,
-    elements: Vec<Vec<T>>,
+    elements: Vec<T>,
+}
+
+impl<T> SquareMatrix<T> {
+    pub fn from_fn<F>(dimension: usize, mut f: F) -> Self
+    where
+        F: FnMut((usize, usize)) -> T,
+    {
+        Self {
+            dimension,
+            elements: (0..dimension * dimension)
+                .map(|index| f(index.div_mod_floor(&dimension)))
+                .collect(),
+        }
+    }
+
+    pub fn map<U, F>(self, f: F) -> SquareMatrix<U>
+    where
+        F: FnMut(T) -> U,
+    {
+        SquareMatrix {
+            dimension: self.dimension,
+            elements: self.elements.into_iter().map(f).collect(),
+        }
+    }
+
+    pub fn dimension(&self) -> usize {
+        self.dimension
+    }
+
+    pub fn get(&self, (i, j): (usize, usize)) -> &T {
+        &self.elements[i * self.dimension + j]
+    }
 }
 
 impl<T> SquareMatrix<T>
 where
     T: Ring + Clone,
 {
-    pub fn from_fn<F>(dimension: usize, mut f: F) -> Self
-    where
-        F: FnMut(usize, usize) -> T,
-    {
-        Self {
-            dimension,
-            elements: (0..dimension)
-                .map(|i| (0..dimension).map(|j| f(i, j)).collect())
-                .collect(),
-        }
-    }
-
     pub fn embed(dimension: usize, value: T) -> Self {
         Self::from_fn(
             dimension,
-            |i, j| {
+            |(i, j)| {
                 if i == j {
                     value.clone()
                 } else {
@@ -37,51 +58,36 @@ where
         )
     }
 
-    pub fn zero(dimension: usize) -> Self {
-        Self::from_fn(dimension, |_, _| T::zero())
-    }
-
-    pub fn is_zero(&self) -> bool {
-        (0..self.dimension())
-            .cartesian_product(0..self.dimension())
-            .all(|(i, j)| self.get(i, j).is_zero())
-    }
-
-    pub fn one(dimension: usize) -> Self {
-        Self::from_fn(dimension, |i, j| if i == j { T::one() } else { T::zero() })
-    }
-
-    pub fn is_one(&self) -> bool {
-        (0..self.dimension())
-            .cartesian_product(0..self.dimension())
-            .all(|(i, j)| {
-                if i == j {
-                    self.get(i, j).is_one()
-                } else {
-                    self.get(i, j).is_zero()
-                }
-            })
-    }
-
-    pub fn dimension(&self) -> usize {
-        self.dimension
-    }
-
-    pub fn get(&self, i: usize, j: usize) -> &T {
-        &self.elements[i][j]
-    }
-
-    fn take(&mut self, i: usize, j: usize) -> T {
-        std::mem::replace(&mut self.elements[i][j], T::zero())
+    fn take(&mut self, (i, j): (usize, usize)) -> T {
+        std::mem::replace(&mut self.elements[i * self.dimension + j], T::zero())
     }
 
     pub fn transpose(mut self) -> Self {
-        Self::from_fn(self.dimension(), |i, j| self.take(j, i))
+        Self::from_fn(self.dimension, |(i, j)| self.take((j, i)))
+    }
+
+    pub fn zero(dimension: usize) -> Self {
+        Self::from_fn(dimension, |_| T::zero())
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.elements.iter().all(|element| element.is_zero())
+    }
+
+    pub fn one(dimension: usize) -> Self {
+        Self::from_fn(
+            dimension,
+            |(i, j)| if i == j { T::one() } else { T::zero() },
+        )
+    }
+
+    pub fn is_one(&self) -> bool {
+        (self.clone() - Self::one(self.dimension)).is_zero()
     }
 
     pub fn order(&self) -> usize {
         std::iter::repeat(self.clone())
-            .scan(SquareMatrix::one(self.dimension()), |matrix_acc, matrix| {
+            .scan(SquareMatrix::one(self.dimension), |matrix_acc, matrix| {
                 let matrix_acc_clone = matrix_acc.clone();
                 *matrix_acc *= matrix;
                 Some(matrix_acc_clone)
@@ -95,10 +101,10 @@ where
 
     pub fn determinant(&self) -> T {
         T::sum(
-            (0..self.dimension())
-                .permutations(self.dimension())
+            (0..self.dimension)
+                .permutations(self.dimension)
                 .filter(|permutation| {
-                    (0..self.dimension()).all(|i| !self.get(i, permutation[i]).is_zero())
+                    (0..self.dimension).all(|i| !self.get((i, permutation[i])).is_zero())
                 })
                 .map(|permutation| {
                     let neg_sign = permutation
@@ -113,8 +119,8 @@ where
                         })
                         .fold(false, std::ops::BitXor::bitxor);
                     let product = T::prod(
-                        (0..self.dimension())
-                            .map(|i| self.get(i, permutation[i]))
+                        (0..self.dimension)
+                            .map(|i| self.get((i, permutation[i])))
                             .cloned(),
                     );
                     if neg_sign {
@@ -134,7 +140,7 @@ where
     type Output = Self;
 
     fn neg(mut self) -> Self {
-        Self::from_fn(self.dimension(), |i, j| self.take(i, j).neg())
+        Self::from_fn(self.dimension, |(i, j)| self.take((i, j)).neg())
     }
 }
 
@@ -145,8 +151,10 @@ where
     type Output = Self;
 
     fn add(mut self, mut rhs: Self) -> Self {
-        assert_eq!(self.dimension(), rhs.dimension());
-        Self::from_fn(self.dimension(), |i, j| self.take(i, j).add(rhs.take(i, j)))
+        assert_eq!(self.dimension, rhs.dimension);
+        Self::from_fn(self.dimension, |(i, j)| {
+            self.take((i, j)).add(rhs.take((i, j)))
+        })
     }
 }
 
@@ -157,8 +165,10 @@ where
     type Output = Self;
 
     fn sub(mut self, mut rhs: Self) -> Self {
-        assert_eq!(self.dimension(), rhs.dimension());
-        Self::from_fn(self.dimension(), |i, j| self.take(i, j).sub(rhs.take(i, j)))
+        assert_eq!(self.dimension, rhs.dimension);
+        Self::from_fn(self.dimension, |(i, j)| {
+            self.take((i, j)).sub(rhs.take((i, j)))
+        })
     }
 }
 
@@ -169,9 +179,11 @@ where
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self {
-        assert_eq!(self.dimension(), rhs.dimension());
-        Self::from_fn(self.dimension(), |i, j| {
-            T::sum((0..self.dimension()).map(|k| self.get(i, k).clone().mul(rhs.get(k, j).clone())))
+        assert_eq!(self.dimension, rhs.dimension);
+        Self::from_fn(self.dimension, |(i, j)| {
+            T::sum(
+                (0..self.dimension).map(|k| self.get((i, k)).clone().mul(rhs.get((k, j)).clone())),
+            )
         })
     }
 }
