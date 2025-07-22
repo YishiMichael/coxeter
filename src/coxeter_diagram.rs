@@ -1,6 +1,6 @@
 use itertools::Itertools;
 
-use super::alg::*;
+// use super::alg::*;
 use super::cyclotomic::Cyclotomic;
 use super::dynkin_diagram::DynkinDiagramType;
 use super::square_matrix::SquareMatrix;
@@ -52,7 +52,7 @@ impl<N> CoxeterDiagram<N> {
         })
     }
 
-    pub fn schlafli_matrix(&self) -> SquareMatrix<Cyclotomic<i32, u32>> {
+    pub fn schlafli_matrix(&self) -> SquareMatrix<Cyclotomic> {
         SquareMatrix::from_fn(self.rank(), |(i, j)| {
             self.get_edge((i, j))
                 .map(|label| match label {
@@ -71,7 +71,7 @@ impl<N> CoxeterDiagram<N> {
         })
     }
 
-    pub fn coxeter_element(&self) -> SquareMatrix<Cyclotomic<i32, u32>> {
+    pub fn coxeter_element(&self) -> SquareMatrix<Cyclotomic> {
         let schlafli_matrix = self.schlafli_matrix();
         let dimension = schlafli_matrix.dimension();
         let neg_strict_upper_triangular_matrix = SquareMatrix::from_fn(dimension, |(i, j)| {

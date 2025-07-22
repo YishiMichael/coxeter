@@ -1,7 +1,5 @@
 use itertools::Itertools;
-use num::Integer;
-
-use super::alg::*;
+// use num::Integer;
 
 #[derive(Clone)]
 pub struct SquareMatrix<T> {
@@ -43,7 +41,7 @@ impl<T> SquareMatrix<T> {
 
 impl<T> SquareMatrix<T>
 where
-    T: Ring + Clone,
+    T: Clone,
 {
     pub fn embed(dimension: usize, value: T) -> Self {
         Self::from_fn(
@@ -135,7 +133,7 @@ where
 
 impl<T> std::ops::Neg for SquareMatrix<T>
 where
-    T: Ring + Clone,
+    T: Clone,
 {
     type Output = Self;
 
@@ -146,7 +144,7 @@ where
 
 impl<T> std::ops::Add for SquareMatrix<T>
 where
-    T: Ring + Clone,
+    T: Clone,
 {
     type Output = Self;
 
@@ -160,7 +158,7 @@ where
 
 impl<T> std::ops::Sub for SquareMatrix<T>
 where
-    T: Ring + Clone,
+    T: Clone,
 {
     type Output = Self;
 
@@ -174,7 +172,7 @@ where
 
 impl<T> std::ops::Mul for SquareMatrix<T>
 where
-    T: Ring + Clone,
+    T: Clone,
 {
     type Output = Self;
 
@@ -190,7 +188,7 @@ where
 
 impl<T> std::ops::AddAssign for SquareMatrix<T>
 where
-    T: Ring + Clone,
+    T: Clone,
 {
     fn add_assign(&mut self, rhs: Self) {
         let lhs = std::mem::replace(self, Self::zero(0));
@@ -200,7 +198,7 @@ where
 
 impl<T> std::ops::SubAssign for SquareMatrix<T>
 where
-    T: Ring + Clone,
+    T: Clone,
 {
     fn sub_assign(&mut self, rhs: Self) {
         let lhs = std::mem::replace(self, Self::zero(0));
@@ -210,7 +208,7 @@ where
 
 impl<T> std::ops::MulAssign for SquareMatrix<T>
 where
-    T: Ring + Clone,
+    T: Clone,
 {
     fn mul_assign(&mut self, rhs: Self) {
         let lhs = std::mem::replace(self, Self::zero(0));

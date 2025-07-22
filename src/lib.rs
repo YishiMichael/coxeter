@@ -1,54 +1,51 @@
-pub mod alg;
 pub mod coxeter_diagram;
 pub mod cyclotomic;
 pub mod dynkin_diagram;
-pub mod graded_algebra;
-pub mod prufer_group;
 pub mod square_matrix;
 
 #[cfg(test)]
 mod tests {
-    use super::alg::*;
+    // use super::alg::*;
 
     #[test]
     fn test_cyclotomic() {
         use super::cyclotomic::Cyclotomic;
-        assert!(Cyclotomic::<i32, u32>::root_of_unity(3, 0) == Cyclotomic::root_of_unity(2, 0));
+        assert!(Cyclotomic::root_of_unity(3, 0) == Cyclotomic::root_of_unity(2, 0));
         assert!(Cyclotomic::sum(
             [
-                Cyclotomic::<i32, u32>::root_of_unity(3, 1),
-                Cyclotomic::<i32, u32>::root_of_unity(3, 2),
-                Cyclotomic::<i32, u32>::root_of_unity(3, 0),
+                Cyclotomic::root_of_unity(3, 1),
+                Cyclotomic::root_of_unity(3, 2),
+                Cyclotomic::root_of_unity(3, 0),
             ]
             .into_iter()
         )
         .is_zero());
         assert!(Cyclotomic::sum(
             [
-                Cyclotomic::<i32, u32>::root_of_unity(3, 1),
-                Cyclotomic::<i32, u32>::root_of_unity(9, 6),
-                Cyclotomic::<i32, u32>::root_of_unity(3, 0),
+                Cyclotomic::root_of_unity(3, 1),
+                Cyclotomic::root_of_unity(9, 6),
+                Cyclotomic::root_of_unity(3, 0),
             ]
             .into_iter()
         )
         .is_zero());
         assert!(Cyclotomic::sum(
             [
-                Cyclotomic::<i32, u32>::root_of_unity(2, 0),
-                Cyclotomic::<i32, u32>::root_of_unity(6, 2),
-                Cyclotomic::<i32, u32>::root_of_unity(3, 2),
+                Cyclotomic::root_of_unity(2, 0),
+                Cyclotomic::root_of_unity(6, 2),
+                Cyclotomic::root_of_unity(3, 2),
             ]
             .into_iter()
         )
         .is_zero());
         assert!(Cyclotomic::sum(
             [
-                Cyclotomic::<i32, u32>::root_of_unity(5, 1),
-                Cyclotomic::<i32, u32>::root_of_unity(5, 2),
-                Cyclotomic::<i32, u32>::root_of_unity(5, 3),
-                Cyclotomic::<i32, u32>::root_of_unity(5, 4),
-                Cyclotomic::<i32, u32>::root_of_unity(3, 1).neg(),
-                Cyclotomic::<i32, u32>::root_of_unity(3, 2).neg(),
+                Cyclotomic::root_of_unity(5, 1),
+                Cyclotomic::root_of_unity(5, 2),
+                Cyclotomic::root_of_unity(5, 3),
+                Cyclotomic::root_of_unity(5, 4),
+                Cyclotomic::root_of_unity(3, 1).neg(),
+                Cyclotomic::root_of_unity(3, 2).neg(),
             ]
             .into_iter()
         )
