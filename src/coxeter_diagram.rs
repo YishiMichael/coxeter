@@ -56,16 +56,17 @@ impl<N> CoxeterDiagram<N> {
         SquareMatrix::from_fn(self.rank(), |(i, j)| {
             self.get_edge((i, j))
                 .map(|label| match label {
-                    Label::Implicit => Cyclotomic::one().neg(),
-                    Label::Explicit(label) => Cyclotomic::root_of_unity(2 * label, 1)
-                        .add(Cyclotomic::root_of_unity(2 * label, 2 * label - 1))
-                        .neg(),
+                    Label::Implicit => Cyclotomic::embed_scalar(-1),
+                    Label::Explicit(label) => {
+                        -(Cyclotomic::root_of_unity(2 * label, 1)
+                            + Cyclotomic::root_of_unity(2 * label, 2 * label - 1))
+                    }
                 })
                 .unwrap_or_else(|| {
                     if i == j {
-                        Cyclotomic::one().add(Cyclotomic::one())
+                        Cyclotomic::embed_scalar(2)
                     } else {
-                        Cyclotomic::zero()
+                        Cyclotomic::embed_scalar(0)
                     }
                 })
         })
@@ -76,9 +77,9 @@ impl<N> CoxeterDiagram<N> {
         let dimension = schlafli_matrix.dimension();
         let neg_strict_upper_triangular_matrix = SquareMatrix::from_fn(dimension, |(i, j)| {
             if i < j {
-                schlafli_matrix.get((i, j)).clone().neg()
+                -schlafli_matrix.get((i, j)).clone()
             } else {
-                Cyclotomic::zero()
+                Cyclotomic::embed_scalar(0)
             }
         });
         -(SquareMatrix::one(dimension) - neg_strict_upper_triangular_matrix.clone().transpose())
