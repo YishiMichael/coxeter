@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+feanor-math = { version = "3.4.3", features = ["unstable-enable"] }
 itertools = "0.13.0"
-ndarray = "0.16.1"
-num = "0.4.3"
 petgraph = "0.6.5"

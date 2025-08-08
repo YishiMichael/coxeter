@@ -1,6 +1,5 @@
+use feanor_math::matrix::OwnedMatrix;
 use itertools::Itertools;
-
-use super::square_matrix::SquareMatrix;
 
 pub enum Bond {
     Single,
@@ -49,8 +48,9 @@ impl<N> DynkinDiagram<N> {
             .map(|edge_index| self.0.edge_weight(edge_index).unwrap())
     }
 
-    pub fn cartan_matrix(&self) -> SquareMatrix<i32> {
-        SquareMatrix::from_fn(self.rank(), |(i, j)| {
+    pub fn cartan_matrix(&self) -> OwnedMatrix<i64> {
+        let rank = self.rank();
+        OwnedMatrix::from_fn(rank, rank, |i, j| {
             self.get_edge((i, j))
                 .map(|bond| match bond {
                     Bond::Single => -1,

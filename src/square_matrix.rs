@@ -1,217 +1,139 @@
+use feanor_math::{
+    matrix::OwnedMatrix,
+    ring::{El, RingBase, RingStore},
+};
 use itertools::Itertools;
-// use num::Integer;
 
 #[derive(Clone)]
-pub struct SquareMatrix<T> {
+pub struct SquareMatrixRingBase<R> {
+    base_ring: R,
     dimension: usize,
-    elements: Vec<T>,
 }
 
-impl<T> SquareMatrix<T> {
-    pub fn from_fn<F>(dimension: usize, mut f: F) -> Self
-    where
-        F: FnMut((usize, usize)) -> T,
-    {
+impl<R> SquareMatrixRingBase<R> {
+    pub fn new(base_ring: R, dimension: usize) -> Self {
         Self {
+            base_ring,
             dimension,
-            elements: (0..dimension * dimension)
-                .map(|index| f(index.div_mod_floor(&dimension)))
-                .collect(),
         }
     }
+}
 
-    pub fn map<U, F>(self, f: F) -> SquareMatrix<U>
-    where
-        F: FnMut(T) -> U,
-    {
-        SquareMatrix {
-            dimension: self.dimension,
-            elements: self.elements.into_iter().map(f).collect(),
-        }
-    }
-
-    pub fn dimension(&self) -> usize {
-        self.dimension
-    }
-
-    pub fn get(&self, (i, j): (usize, usize)) -> &T {
-        &self.elements[i * self.dimension + j]
+impl<R> PartialEq for SquareMatrixRingBase<R>
+where
+    R: RingStore,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.base_ring.get_ring() == other.base_ring.get_ring() && self.dimension == other.dimension
     }
 }
 
-impl<T> SquareMatrix<T>
+impl<R> RingBase for SquareMatrixRingBase<R>
 where
-    T: Clone,
+    R: RingStore,
 {
-    pub fn embed(dimension: usize, value: T) -> Self {
-        Self::from_fn(
-            dimension,
-            |(i, j)| {
-                if i == j {
-                    value.clone()
-                } else {
-                    T::zero()
-                }
-            },
-        )
+    type Element = OwnedMatrix<El<R>>;
+
+    fn clone_el(&self, value: &Self::Element) -> Self::Element {
+        value.clone_matrix(&self.base_ring)
     }
 
-    fn take(&mut self, (i, j): (usize, usize)) -> T {
-        std::mem::replace(&mut self.elements[i * self.dimension + j], T::zero())
+    fn add_assign(&self, lhs: &mut Self::Element, mut rhs: Self::Element) {
+        (0..self.dimension)
+            .cartesian_product(0..self.dimension)
+            .for_each(|(i, j)| {
+                self.base_ring.add_assign(
+                    lhs.at_mut(i, j),
+                    std::mem::replace(rhs.at_mut(i, j), self.base_ring.zero()),
+                );
+            });
     }
 
-    pub fn transpose(mut self) -> Self {
-        Self::from_fn(self.dimension, |(i, j)| self.take((j, i)))
+    fn negate_inplace(&self, lhs: &mut Self::Element) {
+        (0..self.dimension)
+            .cartesian_product(0..self.dimension)
+            .for_each(|(i, j)| self.base_ring.negate_inplace(lhs.at_mut(i, j)));
     }
 
-    pub fn zero(dimension: usize) -> Self {
-        Self::from_fn(dimension, |_| T::zero())
-    }
-
-    pub fn is_zero(&self) -> bool {
-        self.elements.iter().all(|element| element.is_zero())
-    }
-
-    pub fn one(dimension: usize) -> Self {
-        Self::from_fn(
-            dimension,
-            |(i, j)| if i == j { T::one() } else { T::zero() },
-        )
-    }
-
-    pub fn is_one(&self) -> bool {
-        (self.clone() - Self::one(self.dimension)).is_zero()
-    }
-
-    pub fn order(&self) -> usize {
-        std::iter::repeat(self.clone())
-            .scan(SquareMatrix::one(self.dimension), |matrix_acc, matrix| {
-                let matrix_acc_clone = matrix_acc.clone();
-                *matrix_acc *= matrix;
-                Some(matrix_acc_clone)
-            })
-            .enumerate()
-            .skip(1)
-            .find(|(_, matrix)| matrix.is_one())
-            .map(|(order, _)| order)
-            .unwrap()
-    }
-
-    pub fn determinant(&self) -> T {
-        T::sum(
-            (0..self.dimension)
-                .permutations(self.dimension)
-                .filter(|permutation| {
-                    (0..self.dimension).all(|i| !self.get((i, permutation[i])).is_zero())
-                })
-                .map(|permutation| {
-                    let neg_sign = permutation
-                        .iter()
-                        .combinations(2)
-                        .map(|index_pair| {
-                            if let [i, j] = index_pair.as_slice() {
-                                i > j
-                            } else {
-                                unreachable!();
-                            }
-                        })
-                        .fold(false, std::ops::BitXor::bitxor);
-                    let product = T::prod(
-                        (0..self.dimension)
-                            .map(|i| self.get((i, permutation[i])))
-                            .cloned(),
-                    );
-                    if neg_sign {
-                        product.neg()
-                    } else {
-                        product
-                    }
-                }),
-        )
-    }
-}
-
-impl<T> std::ops::Neg for SquareMatrix<T>
-where
-    T: Clone,
-{
-    type Output = Self;
-
-    fn neg(mut self) -> Self {
-        Self::from_fn(self.dimension, |(i, j)| self.take((i, j)).neg())
-    }
-}
-
-impl<T> std::ops::Add for SquareMatrix<T>
-where
-    T: Clone,
-{
-    type Output = Self;
-
-    fn add(mut self, mut rhs: Self) -> Self {
-        assert_eq!(self.dimension, rhs.dimension);
-        Self::from_fn(self.dimension, |(i, j)| {
-            self.take((i, j)).add(rhs.take((i, j)))
-        })
-    }
-}
-
-impl<T> std::ops::Sub for SquareMatrix<T>
-where
-    T: Clone,
-{
-    type Output = Self;
-
-    fn sub(mut self, mut rhs: Self) -> Self {
-        assert_eq!(self.dimension, rhs.dimension);
-        Self::from_fn(self.dimension, |(i, j)| {
-            self.take((i, j)).sub(rhs.take((i, j)))
-        })
-    }
-}
-
-impl<T> std::ops::Mul for SquareMatrix<T>
-where
-    T: Clone,
-{
-    type Output = Self;
-
-    fn mul(self, rhs: Self) -> Self {
-        assert_eq!(self.dimension, rhs.dimension);
-        Self::from_fn(self.dimension, |(i, j)| {
-            T::sum(
-                (0..self.dimension).map(|k| self.get((i, k)).clone().mul(rhs.get((k, j)).clone())),
+    fn mul_assign(&self, lhs: &mut Self::Element, rhs: Self::Element) {
+        let els = OwnedMatrix::from_fn(self.dimension, self.dimension, |i, j| {
+            self.base_ring.sum(
+                (0..self.dimension).map(|k| self.base_ring.mul_ref(lhs.at(i, k), rhs.at(k, j))),
             )
+        });
+        *lhs = els;
+    }
+
+    fn from_int(&self, value: i32) -> Self::Element {
+        OwnedMatrix::from_fn(self.dimension, self.dimension, |i, j| {
+            if i == j {
+                self.base_ring.get_ring().from_int(value)
+            } else {
+                self.base_ring.zero()
+            }
         })
     }
-}
 
-impl<T> std::ops::AddAssign for SquareMatrix<T>
-where
-    T: Clone,
-{
-    fn add_assign(&mut self, rhs: Self) {
-        let lhs = std::mem::replace(self, Self::zero(0));
-        *self = lhs + rhs;
+    fn eq_el(&self, lhs: &Self::Element, rhs: &Self::Element) -> bool {
+        (0..self.dimension)
+            .cartesian_product(0..self.dimension)
+            .all(|(i, j)| self.base_ring.eq_el(lhs.at(i, j), rhs.at(i, j)))
     }
-}
 
-impl<T> std::ops::SubAssign for SquareMatrix<T>
-where
-    T: Clone,
-{
-    fn sub_assign(&mut self, rhs: Self) {
-        let lhs = std::mem::replace(self, Self::zero(0));
-        *self = lhs - rhs;
+    fn is_commutative(&self) -> bool {
+        false
     }
-}
 
-impl<T> std::ops::MulAssign for SquareMatrix<T>
-where
-    T: Clone,
-{
-    fn mul_assign(&mut self, rhs: Self) {
-        let lhs = std::mem::replace(self, Self::zero(0));
-        *self = lhs * rhs;
+    fn is_noetherian(&self) -> bool {
+        false
+    }
+
+    fn is_approximate(&self) -> bool {
+        self.base_ring.get_ring().is_approximate()
+    }
+
+    fn dbg_within<'a>(
+        &self,
+        value: &Self::Element,
+        out: &mut std::fmt::Formatter<'a>,
+        env: feanor_math::ring::EnvBindingStrength,
+    ) -> std::fmt::Result {
+        out.write_str(&"[")?;
+        let mut row_iter = value.data().row_iter();
+        if let Some(first_row) = row_iter.next() {
+            out.write_str(&"[")?;
+            let mut el_iter = first_row.into_iter();
+            if let Some(first_el) = el_iter.next() {
+                self.base_ring.get_ring().dbg_within(first_el, out, env)?;
+            }
+            for el in el_iter {
+                out.write_str(&", ")?;
+                self.base_ring.get_ring().dbg_within(el, out, env)?;
+            }
+            out.write_str(&"]")?;
+        }
+        for row in row_iter {
+            out.write_str(&", ")?;
+            out.write_str(&"[")?;
+            let mut el_iter = row.into_iter();
+            if let Some(first_el) = el_iter.next() {
+                self.base_ring.get_ring().dbg_within(first_el, out, env)?;
+            }
+            for el in el_iter {
+                out.write_str(&", ")?;
+                self.base_ring.get_ring().dbg_within(el, out, env)?;
+            }
+            out.write_str(&"]")?;
+        }
+        out.write_str(&"]\n")?;
+        Ok(())
+    }
+
+    fn characteristic<I>(&self, integer_ring: I) -> Option<El<I>>
+    where
+        I: RingStore + Copy,
+        I::Type: feanor_math::integer::IntegerRing,
+    {
+        self.base_ring.characteristic(integer_ring)
     }
 }
