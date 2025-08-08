@@ -1,4 +1,5 @@
-use feanor_math::matrix::OwnedMatrix;
+use super::square_matrix::SquareMatrixRingBase;
+use feanor_math::{matrix::OwnedMatrix, ring::RingBase};
 use itertools::Itertools;
 
 pub enum Bond {
@@ -48,7 +49,10 @@ impl<N> DynkinDiagram<N> {
             .map(|edge_index| self.0.edge_weight(edge_index).unwrap())
     }
 
-    pub fn cartan_matrix(&self) -> OwnedMatrix<i64> {
+    pub fn cartan_matrix(
+        &self,
+    ) -> <SquareMatrixRingBase<feanor_math::primitive_int::StaticRing<i64>> as RingBase>::Element
+    {
         let rank = self.rank();
         OwnedMatrix::from_fn(rank, rank, |i, j| {
             self.get_edge((i, j))

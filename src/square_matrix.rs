@@ -137,3 +137,41 @@ where
         self.base_ring.characteristic(integer_ring)
     }
 }
+
+pub fn determinant<R>(
+    ring: &impl RingStore<Type = SquareMatrixRingBase<R>>,
+    matrix: OwnedMatrix<El<R>>,
+) -> El<R>
+where
+    R: RingStore,
+{
+    let dimension = ring.get_ring().dimension;
+    let base_ring = &ring.get_ring().base_ring;
+    base_ring.sum(
+        (0..dimension)
+            .permutations(dimension)
+            .filter(|permutation| {
+                (0..dimension).all(|i| !base_ring.is_zero(matrix.at(i, permutation[i])))
+            })
+            .map(|permutation| {
+                let neg_sign = permutation
+                    .iter()
+                    .combinations(2)
+                    .map(|index_pair| {
+                        if let [i, j] = index_pair.as_slice() {
+                            i > j
+                        } else {
+                            unreachable!();
+                        }
+                    })
+                    .fold(false, std::ops::BitXor::bitxor);
+                let product = base_ring
+                    .prod((0..dimension).map(|i| base_ring.clone_el(matrix.at(i, permutation[i]))));
+                if neg_sign {
+                    base_ring.negate(product)
+                } else {
+                    product
+                }
+            }),
+    )
+}
