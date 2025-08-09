@@ -18,29 +18,22 @@ pub enum DynkinDiagramType {
     G(usize),
 }
 
-pub struct DynkinDiagram<N>(petgraph::graph::DiGraph<N, Bond>);
+pub struct DynkinDiagram(petgraph::graph::DiGraph<(), Bond>);
 
-impl<N> DynkinDiagram<N> {
+impl DynkinDiagram {
     pub fn new<I>(rank: usize, bonds: I) -> Self
     where
-        N: Default,
         I: IntoIterator<Item = ((usize, usize), Bond)>,
     {
         let mut graph = petgraph::graph::DiGraph::new();
-        let nodes = (0..rank)
-            .map(|_| graph.add_node(N::default()))
-            .collect::<Vec<_>>();
+        let nodes = (0..rank).map(|_| graph.add_node(())).collect::<Vec<_>>();
         bonds.into_iter().for_each(|((i, j), bond)| {
             graph.update_edge(nodes[i], nodes[j], bond);
         });
         Self(graph)
     }
 
-    pub fn rank(&self) -> usize {
-        self.0.node_count()
-    }
-
-    fn get_edge(&self, (i, j): (usize, usize)) -> Option<&Bond> {
+    fn get_edge(&self, i: usize, j: usize) -> Option<&Bond> {
         self.0
             .find_edge(
                 petgraph::visit::NodeIndexable::from_index(&self.0, i),
@@ -49,20 +42,24 @@ impl<N> DynkinDiagram<N> {
             .map(|edge_index| self.0.edge_weight(edge_index).unwrap())
     }
 
+    pub fn rank(&self) -> usize {
+        self.0.node_count()
+    }
+
     pub fn cartan_matrix(
         &self,
     ) -> <SquareMatrixRingBase<feanor_math::primitive_int::StaticRing<i64>> as RingBase>::Element
     {
         let rank = self.rank();
         OwnedMatrix::from_fn(rank, rank, |i, j| {
-            self.get_edge((i, j))
+            self.get_edge(i, j)
                 .map(|bond| match bond {
                     Bond::Single => -1,
                     Bond::Double => -1,
                     Bond::Triple => -1,
                 })
                 .or_else(|| {
-                    self.get_edge((j, i)).map(|bond| match bond {
+                    self.get_edge(j, i).map(|bond| match bond {
                         Bond::Single => -1,
                         Bond::Double => -2,
                         Bond::Triple => -3,
@@ -73,7 +70,7 @@ impl<N> DynkinDiagram<N> {
     }
 }
 
-impl From<DynkinDiagramType> for DynkinDiagram<()> {
+impl From<DynkinDiagramType> for DynkinDiagram {
     fn from(value: DynkinDiagramType) -> Self {
         match value {
             DynkinDiagramType::A(rank @ 1..) => Self::new(

@@ -10,7 +10,7 @@ use feanor_math::{
 };
 use itertools::Itertools;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CoxeterGroupType {
     Elliptic,
     Parabolic,
@@ -25,22 +25,60 @@ pub struct CoxeterGroupInfo {
     pub degrees: Vec<u64>,
 }
 
-pub struct CoxeterDiagram<N>(petgraph::graph::UnGraph<N, u64>);
+#[derive(Clone, Debug)]
+pub struct CoxeterDiagram(petgraph::graph::UnGraph<(), u64>);
 
-impl<N> CoxeterDiagram<N> {
+impl CoxeterDiagram {
     pub fn new<I>(rank: usize, labels: I) -> Self
     where
-        N: Default,
         I: IntoIterator<Item = ((usize, usize), u64)>,
     {
         let mut graph = petgraph::graph::UnGraph::new_undirected();
-        let nodes = (0..rank)
-            .map(|_| graph.add_node(N::default()))
-            .collect::<Vec<_>>();
+        (0..rank).for_each(|_| {
+            graph.add_node(());
+        });
         labels.into_iter().for_each(|((i, j), label)| {
-            graph.add_edge(nodes[i], nodes[j], label);
+            graph.add_edge(
+                petgraph::graph::NodeIndex::new(i),
+                petgraph::graph::NodeIndex::new(j),
+                label,
+            );
         });
         Self(graph)
+    }
+
+    fn get_edge(&self, i: usize, j: usize) -> Option<&u64> {
+        self.0
+            .find_edge(
+                petgraph::graph::NodeIndex::new(i),
+                petgraph::graph::NodeIndex::new(j),
+            )
+            .map(|edge_index| self.0.edge_weight(edge_index).unwrap())
+    }
+
+    fn add_node(&mut self) {
+        self.0.add_node(());
+    }
+
+    fn set_edge(&mut self, i: usize, j: usize, label: u64) {
+        self.0.update_edge(
+            petgraph::graph::NodeIndex::new(i),
+            petgraph::graph::NodeIndex::new(j),
+            label,
+        );
+    }
+
+    fn is_isomorphic(&self, other: &Self) -> bool {
+        petgraph::algo::is_isomorphic_matching(&self.0, &other.0, PartialEq::eq, PartialEq::eq)
+    }
+
+    fn is_isomorphic_subgraph(&self, other: &Self) -> bool {
+        petgraph::algo::is_isomorphic_subgraph_matching(
+            &self.0,
+            &other.0,
+            PartialEq::eq,
+            PartialEq::eq,
+        )
     }
 
     pub fn rank(&self) -> usize {
@@ -68,15 +106,6 @@ impl<N> CoxeterDiagram<N> {
         ))
     }
 
-    fn get_edge(&self, (i, j): (usize, usize)) -> Option<&u64> {
-        self.0
-            .find_edge(
-                petgraph::visit::NodeIndexable::from_index(&self.0, i),
-                petgraph::visit::NodeIndexable::from_index(&self.0, j),
-            )
-            .map(|edge_index| self.0.edge_weight(edge_index).unwrap())
-    }
-
     pub fn schlafli_matrix(
         &self,
     ) -> <SquareMatrixRingBase<
@@ -85,7 +114,7 @@ impl<N> CoxeterDiagram<N> {
         let rank = self.rank();
         let cr = self.cyclotomic_ring();
         OwnedMatrix::from_fn(rank, rank, |i, j| {
-            self.get_edge((i, j))
+            self.get_edge(i, j)
                 .map(|&label| {
                     if label == 3 {
                         cr.neg_one()
@@ -236,6 +265,123 @@ impl<N> CoxeterDiagram<N> {
             degrees,
         }
     }
+
+    pub fn enumerate_connected_acyclic(
+        rank: usize,
+        max_depth: usize,
+    ) -> Vec<(Self, CoxeterGroupType)> {
+        let mut coxeter_diagrams = Vec::new();
+        if rank == 1 {
+            coxeter_diagrams.push((Self::new(1, std::iter::empty()), CoxeterGroupType::Elliptic));
+        } else {
+            let mut elliptic_coxeter_diagrams = Vec::new();
+            let mut parabolic_coxeter_diagrams = Vec::new();
+            let mut hyperbolic_coxeter_diagrams = Vec::new();
+            for (coxeter_diagram, coxeter_group_type) in
+                Self::enumerate_connected_acyclic(rank - 1, max_depth)
+            {
+                match coxeter_group_type {
+                    CoxeterGroupType::Elliptic => elliptic_coxeter_diagrams.push(coxeter_diagram),
+                    CoxeterGroupType::Parabolic => parabolic_coxeter_diagrams.push(coxeter_diagram),
+                    CoxeterGroupType::Hyperbolic => {
+                        hyperbolic_coxeter_diagrams.push(coxeter_diagram)
+                    }
+                }
+            }
+
+            let mut visited_coxeter_diagrams = Vec::new();
+            'out: for elliptic in &elliptic_coxeter_diagrams {
+                for i in 0..rank - 1 {
+                    for label in 3.. {
+                        let mut coxeter_diagram = elliptic.clone();
+                        coxeter_diagram.add_node();
+                        coxeter_diagram.set_edge(i, rank - 1, label);
+
+                        if visited_coxeter_diagrams
+                            .iter()
+                            .any(|visited| coxeter_diagram.is_isomorphic(visited))
+                        {
+                            continue;
+                        }
+                        visited_coxeter_diagrams.push(coxeter_diagram.clone());
+
+                        if hyperbolic_coxeter_diagrams
+                            .iter()
+                            .any(|hyperbolic| hyperbolic.is_isomorphic_subgraph(&coxeter_diagram))
+                        {
+                            break;
+                        } else if parabolic_coxeter_diagrams
+                            .iter()
+                            .any(|parabolic| parabolic.is_isomorphic_subgraph(&coxeter_diagram))
+                        {
+                            coxeter_diagrams.push((coxeter_diagram, CoxeterGroupType::Hyperbolic));
+                            break;
+                        } else {
+                            let coxeter_group_type = coxeter_diagram.coxeter_group_type();
+                            coxeter_diagrams.push((coxeter_diagram, coxeter_group_type));
+                            if coxeter_diagrams.len() >= max_depth {
+                                break 'out;
+                            }
+                            if coxeter_group_type == CoxeterGroupType::Hyperbolic {
+                                break;
+                            }
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
+        dbg!(&coxeter_diagrams);
+        coxeter_diagrams
+        // let mut triplet = Triplet {
+        //     elliptic: Vec::new(),
+        //     parabolic: Vec::new(),
+        //     hyperbolic: Vec::new(),
+        // };
+        // if n == 1 {
+        //     triplet.elliptic.push(SchlafliSymbol::empty()); // {}
+        // } else {
+        //     let prev_triplet = Self::enumerate_triplet(n - 1);
+        //     for elliptic in &prev_triplet.elliptic {
+        //         for label in 3.. {
+        //             let schlafli_symbol = elliptic.add_label(label);
+        //             if prev_triplet.hyperbolic.iter().any(|hyperbolic| {
+        //                 hyperbolic
+        //                     .coxeter_graph()
+        //                     .is_isomorphic_subgraph(schlafli_symbol.coxeter_graph())
+        //             }) {
+        //                 break;
+        //             } else if prev_triplet.parabolic.iter().any(|parabolic| {
+        //                 parabolic
+        //                     .coxeter_graph()
+        //                     .is_isomorphic_subgraph(schlafli_symbol.coxeter_graph())
+        //             }) {
+        //                 triplet.hyperbolic.push(schlafli_symbol);
+        //                 break;
+        //             } else if schlafli_symbol.coxeter_graph().is_positive_definite() {
+        //                 triplet.elliptic.push(schlafli_symbol);
+        //                 continue;
+        //             } else if schlafli_symbol.coxeter_graph().is_positive_semidefinite() {
+        //                 triplet.parabolic.push(schlafli_symbol);
+        //                 continue;
+        //             } else {
+        //                 triplet.hyperbolic.push(schlafli_symbol);
+        //                 break;
+        //             }
+        //         }
+        //     }
+        // }
+        // triplet
+    }
+
+    pub fn enumerate_finite(rank: usize, max_depth: usize) -> Vec<Self> {
+        Self::enumerate_connected_acyclic(rank, max_depth)
+            .into_iter()
+            .filter_map(|(coxeter_diagram, coxeter_group_type)| {
+                (coxeter_group_type == CoxeterGroupType::Elliptic).then_some(coxeter_diagram)
+            })
+            .collect()
+    }
 }
 
 pub enum CoxeterDiagramType {
@@ -250,7 +396,7 @@ pub enum CoxeterDiagramType {
     I2(u64),
 }
 
-impl From<CoxeterDiagramType> for CoxeterDiagram<()> {
+impl From<CoxeterDiagramType> for CoxeterDiagram {
     fn from(value: CoxeterDiagramType) -> Self {
         match value {
             CoxeterDiagramType::A(rank @ 1..) => {
