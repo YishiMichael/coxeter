@@ -26,9 +26,15 @@ impl DynkinDiagram {
         I: IntoIterator<Item = ((usize, usize), Bond)>,
     {
         let mut graph = petgraph::graph::DiGraph::new();
-        let nodes = (0..rank).map(|_| graph.add_node(())).collect::<Vec<_>>();
+        (0..rank).for_each(|_| {
+            graph.add_node(());
+        });
         bonds.into_iter().for_each(|((i, j), bond)| {
-            graph.update_edge(nodes[i], nodes[j], bond);
+            graph.update_edge(
+                petgraph::graph::NodeIndex::new(i),
+                petgraph::graph::NodeIndex::new(j),
+                bond,
+            );
         });
         Self(graph)
     }

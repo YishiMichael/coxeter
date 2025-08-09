@@ -56,28 +56,12 @@ impl CoxeterDiagram {
             .map(|edge_index| self.0.edge_weight(edge_index).unwrap())
     }
 
-    fn add_node(&mut self) {
-        self.0.add_node(());
-    }
-
-    fn set_edge(&mut self, i: usize, j: usize, label: u64) {
-        self.0.update_edge(
-            petgraph::graph::NodeIndex::new(i),
-            petgraph::graph::NodeIndex::new(j),
-            label,
-        );
-    }
-
-    fn is_isomorphic(&self, other: &Self) -> bool {
-        petgraph::algo::is_isomorphic_matching(&self.0, &other.0, PartialEq::eq, PartialEq::eq)
-    }
-
-    fn is_isomorphic_subgraph(&self, other: &Self) -> bool {
+    fn is_subgraph_of(&self, other: &Self) -> bool {
         petgraph::algo::is_isomorphic_subgraph_matching(
             &self.0,
             &other.0,
-            PartialEq::eq,
-            PartialEq::eq,
+            PartialOrd::le,
+            PartialOrd::le,
         )
     }
 
@@ -266,122 +250,126 @@ impl CoxeterDiagram {
         }
     }
 
-    pub fn enumerate_connected_acyclic(
+    pub fn enumerate_trees(rank: usize, depth_bound: usize) -> impl Iterator<Item = Self> {
+        (1..rank)
+            .map(|j| (0..j).map(move |i| (i, j)))
+            .multi_cartesian_product()
+            .map(move |node_index_pairs| {
+                let mut tree = petgraph::graph::UnGraph::new_undirected();
+                (0..rank).for_each(|_| {
+                    tree.add_node(());
+                });
+                node_index_pairs.iter().for_each(|&(i, j)| {
+                    tree.add_edge(
+                        petgraph::graph::NodeIndex::new(i),
+                        petgraph::graph::NodeIndex::new(j),
+                        3_u64,
+                    );
+                });
+                tree
+            })
+            .unique_by_eq(|g0, g1| petgraph::algo::is_isomorphic(g0, g1))
+            .cartesian_product((0..=depth_bound).flat_map(move |depth| {
+                std::iter::repeat_n(0..rank - 1, depth).multi_cartesian_product()
+            }))
+            .map(|(tree, edge_indices)| {
+                let mut graph = tree.clone();
+                edge_indices.into_iter().for_each(|edge_index| {
+                    *graph
+                        .edge_weight_mut(petgraph::graph::EdgeIndex::new(edge_index))
+                        .unwrap() += 1;
+                });
+                graph
+            })
+            .unique_by_eq(|g0, g1| {
+                petgraph::algo::is_isomorphic_matching(g0, g1, PartialEq::eq, PartialEq::eq)
+            })
+            .map(CoxeterDiagram)
+    }
+
+    pub fn enumerate_trees_classified(
         rank: usize,
-        max_depth: usize,
-    ) -> Vec<(Self, CoxeterGroupType)> {
-        let mut coxeter_diagrams = Vec::new();
-        if rank == 1 {
-            coxeter_diagrams.push((Self::new(1, std::iter::empty()), CoxeterGroupType::Elliptic));
-        } else {
-            let mut elliptic_coxeter_diagrams = Vec::new();
-            let mut parabolic_coxeter_diagrams = Vec::new();
-            let mut hyperbolic_coxeter_diagrams = Vec::new();
-            for (coxeter_diagram, coxeter_group_type) in
-                Self::enumerate_connected_acyclic(rank - 1, max_depth)
+        depth_bound: usize,
+    ) -> impl Iterator<Item = (Self, CoxeterGroupType)> {
+        let mut verified_non_elliptic_coxeter_diagrams: Vec<Self> = Vec::new();
+        Self::enumerate_trees(rank, depth_bound).map(move |coxeter_diagram| {
+            let (coxeter_group_type, verified) = if verified_non_elliptic_coxeter_diagrams
+                .iter()
+                .any(|non_elliptic| non_elliptic.is_subgraph_of(&coxeter_diagram))
             {
-                match coxeter_group_type {
-                    CoxeterGroupType::Elliptic => elliptic_coxeter_diagrams.push(coxeter_diagram),
-                    CoxeterGroupType::Parabolic => parabolic_coxeter_diagrams.push(coxeter_diagram),
-                    CoxeterGroupType::Hyperbolic => {
-                        hyperbolic_coxeter_diagrams.push(coxeter_diagram)
-                    }
-                }
+                (CoxeterGroupType::Hyperbolic, false)
+            } else {
+                (coxeter_diagram.coxeter_group_type(), true)
+            };
+            if coxeter_group_type != CoxeterGroupType::Elliptic && verified {
+                verified_non_elliptic_coxeter_diagrams.push(coxeter_diagram.clone());
             }
+            (coxeter_diagram, coxeter_group_type)
+        })
+    }
+}
 
-            let mut visited_coxeter_diagrams = Vec::new();
-            'out: for elliptic in &elliptic_coxeter_diagrams {
-                for i in 0..rank - 1 {
-                    for label in 3.. {
-                        let mut coxeter_diagram = elliptic.clone();
-                        coxeter_diagram.add_node();
-                        coxeter_diagram.set_edge(i, rank - 1, label);
+trait UniqueByEqTrait: Sized + Iterator {
+    fn unique_by_eq<F>(self, f: F) -> UniqueByEq<Self, F, Self::Item>
+    where
+        Self::Item: Clone,
+        F: FnMut(&Self::Item, &Self::Item) -> bool,
+    {
+        UniqueByEq {
+            iter: self,
+            f,
+            visited: Vec::new(),
+        }
+        // fn unique_graphs<G>(graph_iter: impl Iterator<Item = G>) -> impl Iterator<Item = G>
+        // where
+        //     G: petgraph::visit::NodeCompactIndexable
+        //         + petgraph::visit::EdgeCount
+        //         + petgraph::visit::GetAdjacencyMatrix
+        //         + petgraph::visit::GraphProp
+        //         + petgraph::visit::IntoNeighborsDirected,
+        // {
+        //     let mut visited_graphs = Vec::new();
+        //     graph_iter.filter_map(move |graph| {
+        //         (!visited_graphs
+        //             .iter()
+        //             .any(|visited_graph| petgraph::algo::is_isomorphic(visited_graph, graph)))
+        //         .then_some(graph)
+        //         .inspect(|graph| visited_graphs.push(graph.clone()))
+        //     })
+        // }
+    }
+}
 
-                        if visited_coxeter_diagrams
-                            .iter()
-                            .any(|visited| coxeter_diagram.is_isomorphic(visited))
-                        {
-                            continue;
-                        }
-                        visited_coxeter_diagrams.push(coxeter_diagram.clone());
+struct UniqueByEq<I, F, T> {
+    iter: I,
+    f: F,
+    visited: Vec<T>,
+}
 
-                        if hyperbolic_coxeter_diagrams
-                            .iter()
-                            .any(|hyperbolic| hyperbolic.is_isomorphic_subgraph(&coxeter_diagram))
-                        {
-                            break;
-                        } else if parabolic_coxeter_diagrams
-                            .iter()
-                            .any(|parabolic| parabolic.is_isomorphic_subgraph(&coxeter_diagram))
-                        {
-                            coxeter_diagrams.push((coxeter_diagram, CoxeterGroupType::Hyperbolic));
-                            break;
-                        } else {
-                            let coxeter_group_type = coxeter_diagram.coxeter_group_type();
-                            coxeter_diagrams.push((coxeter_diagram, coxeter_group_type));
-                            if coxeter_diagrams.len() >= max_depth {
-                                break 'out;
-                            }
-                            if coxeter_group_type == CoxeterGroupType::Hyperbolic {
-                                break;
-                            }
-                            continue;
-                        }
-                    }
-                }
+impl<I, F, T> Iterator for UniqueByEq<I, F, T>
+where
+    I: Iterator<Item = T>,
+    F: FnMut(&T, &T) -> bool,
+    T: Clone,
+{
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(item) = self.iter.next() {
+            if !self.visited.iter().any(|visited| (self.f)(visited, &item)) {
+                self.visited.push(item.clone());
+                return Some(item);
             }
         }
-        dbg!(&coxeter_diagrams);
-        coxeter_diagrams
-        // let mut triplet = Triplet {
-        //     elliptic: Vec::new(),
-        //     parabolic: Vec::new(),
-        //     hyperbolic: Vec::new(),
-        // };
-        // if n == 1 {
-        //     triplet.elliptic.push(SchlafliSymbol::empty()); // {}
-        // } else {
-        //     let prev_triplet = Self::enumerate_triplet(n - 1);
-        //     for elliptic in &prev_triplet.elliptic {
-        //         for label in 3.. {
-        //             let schlafli_symbol = elliptic.add_label(label);
-        //             if prev_triplet.hyperbolic.iter().any(|hyperbolic| {
-        //                 hyperbolic
-        //                     .coxeter_graph()
-        //                     .is_isomorphic_subgraph(schlafli_symbol.coxeter_graph())
-        //             }) {
-        //                 break;
-        //             } else if prev_triplet.parabolic.iter().any(|parabolic| {
-        //                 parabolic
-        //                     .coxeter_graph()
-        //                     .is_isomorphic_subgraph(schlafli_symbol.coxeter_graph())
-        //             }) {
-        //                 triplet.hyperbolic.push(schlafli_symbol);
-        //                 break;
-        //             } else if schlafli_symbol.coxeter_graph().is_positive_definite() {
-        //                 triplet.elliptic.push(schlafli_symbol);
-        //                 continue;
-        //             } else if schlafli_symbol.coxeter_graph().is_positive_semidefinite() {
-        //                 triplet.parabolic.push(schlafli_symbol);
-        //                 continue;
-        //             } else {
-        //                 triplet.hyperbolic.push(schlafli_symbol);
-        //                 break;
-        //             }
-        //         }
-        //     }
-        // }
-        // triplet
+        None
     }
+}
 
-    pub fn enumerate_finite(rank: usize, max_depth: usize) -> Vec<Self> {
-        Self::enumerate_connected_acyclic(rank, max_depth)
-            .into_iter()
-            .filter_map(|(coxeter_diagram, coxeter_group_type)| {
-                (coxeter_group_type == CoxeterGroupType::Elliptic).then_some(coxeter_diagram)
-            })
-            .collect()
-    }
+impl<I> UniqueByEqTrait for I
+where
+    I: Sized + Iterator,
+    I::Item: Clone,
+{
 }
 
 pub enum CoxeterDiagramType {
