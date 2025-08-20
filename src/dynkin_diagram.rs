@@ -42,8 +42,8 @@ impl DynkinDiagram {
     fn get_edge(&self, i: usize, j: usize) -> Option<&Bond> {
         self.0
             .find_edge(
-                petgraph::visit::NodeIndexable::from_index(&self.0, i),
-                petgraph::visit::NodeIndexable::from_index(&self.0, j),
+                petgraph::graph::NodeIndex::new(i),
+                petgraph::graph::NodeIndex::new(j),
             )
             .map(|edge_index| self.0.edge_weight(edge_index).unwrap())
     }

@@ -56,7 +56,7 @@ impl CoxeterDiagram {
             .map(|edge_index| self.0.edge_weight(edge_index).unwrap())
     }
 
-    fn is_subgraph_of(&self, other: &Self) -> bool {
+    pub fn is_subgraph_of(&self, other: &Self) -> bool {
         petgraph::algo::is_isomorphic_subgraph_matching(
             &self.0,
             &other.0,
@@ -250,61 +250,66 @@ impl CoxeterDiagram {
         }
     }
 
-    pub fn enumerate_trees(rank: usize, depth_bound: usize) -> impl Iterator<Item = Self> {
-        (1..rank)
-            .map(|j| (0..j).map(move |i| (i, j)))
-            .multi_cartesian_product()
-            .map(move |node_index_pairs| {
-                let mut tree = petgraph::graph::UnGraph::new_undirected();
-                (0..rank).for_each(|_| {
-                    tree.add_node(());
-                });
-                node_index_pairs.iter().for_each(|&(i, j)| {
-                    tree.add_edge(
-                        petgraph::graph::NodeIndex::new(i),
-                        petgraph::graph::NodeIndex::new(j),
-                        3_u64,
-                    );
-                });
-                tree
-            })
-            .unique_by_eq(|g0, g1| petgraph::algo::is_isomorphic(g0, g1))
-            .cartesian_product((0..=depth_bound).flat_map(move |depth| {
-                std::iter::repeat_n(0..rank - 1, depth).multi_cartesian_product()
-            }))
-            .map(|(tree, edge_indices)| {
-                let mut graph = tree.clone();
-                edge_indices.into_iter().for_each(|edge_index| {
-                    *graph
-                        .edge_weight_mut(petgraph::graph::EdgeIndex::new(edge_index))
-                        .unwrap() += 1;
-                });
-                graph
-            })
-            .unique_by_eq(|g0, g1| {
-                petgraph::algo::is_isomorphic_matching(g0, g1, PartialEq::eq, PartialEq::eq)
-            })
-            .map(CoxeterDiagram)
-    }
-
-    pub fn enumerate_trees_classified(
-        rank: usize,
-        depth_bound: usize,
-    ) -> impl Iterator<Item = (Self, CoxeterGroupType)> {
-        let mut verified_non_elliptic_coxeter_diagrams: Vec<Self> = Vec::new();
-        Self::enumerate_trees(rank, depth_bound).map(move |coxeter_diagram| {
-            let (coxeter_group_type, verified) = if verified_non_elliptic_coxeter_diagrams
-                .iter()
-                .any(|non_elliptic| non_elliptic.is_subgraph_of(&coxeter_diagram))
-            {
-                (CoxeterGroupType::Hyperbolic, false)
-            } else {
-                (coxeter_diagram.coxeter_group_type(), true)
-            };
-            if coxeter_group_type != CoxeterGroupType::Elliptic && verified {
-                verified_non_elliptic_coxeter_diagrams.push(coxeter_diagram.clone());
-            }
-            (coxeter_diagram, coxeter_group_type)
+    pub fn enumerate_trees_by_rank_and_depth(
+    ) -> impl Iterator<Item = (usize, impl Iterator<Item = (usize, Vec<Self>)>)> {
+        (1..).map(|rank| {
+            (
+                rank,
+                std::iter::repeat(
+                    (1..rank)
+                        .map(|j| (0..j).rev().map(move |i| (i, j)))
+                        .multi_cartesian_product()
+                        .map(move |node_index_pairs| {
+                            let mut tree = petgraph::graph::UnGraph::new_undirected();
+                            (0..rank).for_each(|_| {
+                                tree.add_node(());
+                            });
+                            node_index_pairs.iter().for_each(|&(i, j)| {
+                                tree.add_edge(
+                                    petgraph::graph::NodeIndex::new(i),
+                                    petgraph::graph::NodeIndex::new(j),
+                                    3_u64,
+                                );
+                            });
+                            tree
+                        })
+                        .unique_by_eq(|g0, g1| petgraph::algo::is_isomorphic(g0, g1))
+                        .collect_vec(),
+                )
+                .enumerate()
+                .map(move |(depth, trees)| {
+                    (
+                        depth,
+                        trees
+                            .into_iter()
+                            .flat_map(move |tree| {
+                                std::iter::repeat_n(0..rank - 1, depth)
+                                    .multi_cartesian_product()
+                                    .map(move |edge_indices| {
+                                        let mut graph = tree.clone();
+                                        edge_indices.into_iter().for_each(|edge_index| {
+                                            *graph
+                                                .edge_weight_mut(petgraph::graph::EdgeIndex::new(
+                                                    edge_index,
+                                                ))
+                                                .unwrap() += 1;
+                                        });
+                                        graph
+                                    })
+                                    .unique_by_eq(move |g0, g1| {
+                                        petgraph::algo::is_isomorphic_matching(
+                                            g0,
+                                            g1,
+                                            PartialEq::eq,
+                                            PartialEq::eq,
+                                        )
+                                    })
+                                    .map(CoxeterDiagram)
+                            })
+                            .collect(),
+                    )
+                }),
+            )
         })
     }
 }
@@ -320,23 +325,6 @@ trait UniqueByEqTrait: Sized + Iterator {
             f,
             visited: Vec::new(),
         }
-        // fn unique_graphs<G>(graph_iter: impl Iterator<Item = G>) -> impl Iterator<Item = G>
-        // where
-        //     G: petgraph::visit::NodeCompactIndexable
-        //         + petgraph::visit::EdgeCount
-        //         + petgraph::visit::GetAdjacencyMatrix
-        //         + petgraph::visit::GraphProp
-        //         + petgraph::visit::IntoNeighborsDirected,
-        // {
-        //     let mut visited_graphs = Vec::new();
-        //     graph_iter.filter_map(move |graph| {
-        //         (!visited_graphs
-        //             .iter()
-        //             .any(|visited_graph| petgraph::algo::is_isomorphic(visited_graph, graph)))
-        //         .then_some(graph)
-        //         .inspect(|graph| visited_graphs.push(graph.clone()))
-        //     })
-        // }
     }
 }
 

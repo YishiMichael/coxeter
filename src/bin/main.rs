@@ -1,26 +1,35 @@
 use coxeter::*;
 
 fn main() {
-    for (rank, depth_bound) in [
-        (1, 6),
-        (2, 6),
-        (3, 3),
-        (4, 2),
-        (5, 2),
-        (6, 2),
-        (7, 2),
-        (8, 2),
-        (9, 2),
-        (10, 2),
-    ] {
-        for (coxeter_diagram, coxeter_group_type) in
-            coxeter_diagram::CoxeterDiagram::enumerate_trees_classified(rank, depth_bound)
-        {
-            if coxeter_group_type != coxeter_diagram::CoxeterGroupType::Hyperbolic {
-                dbg!(coxeter_diagram.rank());
-                dbg!(coxeter_diagram);
-                dbg!(coxeter_group_type);
+    let mut verified_non_elliptic_coxeter_diagrams = Vec::<coxeter_diagram::CoxeterDiagram>::new();
+    for (rank, rank_iter) in coxeter_diagram::CoxeterDiagram::enumerate_trees_by_rank_and_depth() {
+        for (depth, coxeter_diagrams) in rank_iter {
+            let mut has_elliptic = false;
+            for coxeter_diagram in coxeter_diagrams {
+                if verified_non_elliptic_coxeter_diagrams
+                    .iter()
+                    .any(|non_elliptic| non_elliptic.is_subgraph_of(&coxeter_diagram))
+                {
+                    continue;
+                }
+                let coxeter_group_type = coxeter_diagram.coxeter_group_type();
+                if coxeter_group_type == coxeter_diagram::CoxeterGroupType::Elliptic
+                    || coxeter_group_type == coxeter_diagram::CoxeterGroupType::Parabolic
+                {
+                    println!("{:?} -> {:?}", &coxeter_diagram, coxeter_group_type);
+                }
+                if coxeter_group_type == coxeter_diagram::CoxeterGroupType::Elliptic {
+                    has_elliptic = true;
+                } else {
+                    verified_non_elliptic_coxeter_diagrams.push(coxeter_diagram);
+                }
             }
+            if !has_elliptic || depth > 12 {
+                break;
+            }
+        }
+        if rank > 12 {
+            break;
         }
     }
 }
